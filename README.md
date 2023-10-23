@@ -40,13 +40,13 @@ The primary objectives of this project are as follows:
 [ModelSet](https://github.com/modelset/modelset-dataset) consists of 9251 UML models, which are considered as typed graphs where each node and edge belong to a specific type. 
 UML models elements i.e., the nodes and edges can belong to the ECore vocabulary or UML Papyrus vocabulary. 
 
-![UML Model with Ecore Metamodel](ModelSet-Ecore-Dataset.png) 
+![UML Model with Ecore Metamodel](imgs/ModelSet-Ecore-Dataset.png) 
 
 *Fig. 1 UML Models with Ecore Vocabulary.*
 
 Fig. 1 shows the distribution of different types of nodes for UML models that follow the Ecore Vocabulary, which means the nodes and edges will belong to only these types.
 
-![UML model with Papyrus Metamodel](ModelSet-UML-Dataset.png) 
+![UML model with Papyrus Metamodel](imgs/ModelSet-UML-Dataset.png) 
 
 *Fig. 2 UML Models with Ecore Vocabulary.*
 
@@ -54,7 +54,7 @@ Fig. 2 distribution of different types of nodes for UML models that follow the P
 
 [ModelSet](https://github.com/modelset/modelset-dataset) also consists of labeled dataset of each model belonging to one of the categories.
 
-![ModelSet Categories](ModelSet-Categories.png)
+![ModelSet Categories](imgs/ModelSet-Categories.png)
 
 *Fig. 3 Model categories*
 
@@ -62,7 +62,7 @@ Fig. 3 shows the different categories of models available in the ModelSet datase
 
 The dataset that involves a natural language description of the elements in a model. 
 
-[Text2Model Fragments](Text2Model-fragments.png)
+[Text2Model Fragments](imgs/Text2Model-fragments.png)
 
 *Fig. 4 Textual description of a UML Model*
 
