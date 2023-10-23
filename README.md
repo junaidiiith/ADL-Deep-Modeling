@@ -52,6 +52,7 @@ Fig. 1 shows the distribution of different types of nodes for UML models that fo
 Fig. 2 distribution of different types of nodes for UML models that follow the Papyrus vocabulary.
 
 [ModelSet](https://github.com/modelset/modelset-dataset) also consists of labeled dataset of each model belonging to one of the categories.
+
 ![ModelSet Categories](ModelSet-Categories.png)
 
 *Fig. 3 Model categories*
