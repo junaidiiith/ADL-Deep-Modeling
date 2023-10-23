@@ -41,11 +41,13 @@ The primary objectives of this project are as follows:
 UML models elements i.e., the nodes and edges can belong to the ECore vocabulary or UML Papyrus vocabulary. 
 
 ![UML Model with Ecore Metamodel](ModelSet-Ecore-Dataset.png) 
+
 *Fig. 1 UML Models with Ecore Vocabulary.*
 
 Fig. 1 shows the distribution of different types of nodes for UML models that follow the Ecore Vocabulary, which means the nodes and edges will belong to only these types.
 
 ![UML model with Papyrus Metamodel](ModelSet-UML-Dataset.png) 
+
 *Fig. 2 UML Models with Ecore Vocabulary.*
 Fig. 2 distribution of different types of nodes for UML models that follow the Papyrus vocabulary.
 
