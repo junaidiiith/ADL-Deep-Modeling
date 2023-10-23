@@ -37,7 +37,9 @@ The primary objectives of this project are as follows:
 
 ### About the Dataset
 
-[ModelSet](https://github.com/modelset/modelset-dataset) consists of 9251 UML models, which are considered as typed graphs where each node and edge belong to a specific type. UML models elements i.e., the nodes and edges can belong to the ECore vocabulary or UML Papyrus vocabulary. ![UML Model with Ecore Metamodel](ModelSet-Ecore-Dataset.png) shows the distribution of different types of nodes for UML models that follow the Ecore Vocabulary, which means the nodes and edges will belong to only these types and ![UML model with Papyrus Metamodel](ModelSet-UML-Dataset.png) shows the distribution of different types of nodes for UML models that follow the Papyrus vocabulary.
+[ModelSet](https://github.com/modelset/modelset-dataset) consists of 9251 UML models, which are considered as typed graphs where each node and edge belong to a specific type. UML models elements i.e., the nodes and edges can belong to the ECore vocabulary or UML Papyrus vocabulary. ![UML Model with Ecore Metamodel](ModelSet-Ecore-Dataset.png) shows the distribution of different types of nodes for UML models that follow the Ecore Vocabulary, which means the nodes and edges will belong to only these types.
+
+![UML model with Papyrus Metamodel](ModelSet-UML-Dataset.png) shows the distribution of different types of nodes for UML models that follow the Papyrus vocabulary.
 
 ### Methodology
 
