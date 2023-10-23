@@ -100,7 +100,7 @@ To achieve the stated objectives, in this project I will train my own transforme
 
 The successful completion of this project will result in the following outcomes:
 
--A system that can provide recommendations for missing model elements and generate models based on user inputs.
+- A system that can provide recommendations for missing model elements and generate models based on user inputs.
 - An efficient classification of UML models based on their domain.
 - A requirements to UML model generator
 
