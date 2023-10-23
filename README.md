@@ -62,7 +62,7 @@ Fig. 3 shows the different categories of models available in the ModelSet datase
 
 The dataset that involves a natural language description of the elements in a model. 
 
-[Text2Model Fragments](imgs/Text2Model-fragments.png)
+![Text2Model Fragments](imgs/Text2Model-fragments.png)
 
 *Fig. 4 Textual description of a UML Model*
 
