@@ -210,7 +210,26 @@ class UMLGPT(nn.Module):
 
             self.apply(weights_init)
 
+
     def forward(self, x, attention_mask):
+        embeddings = self.get_embedding(x, attention_mask)
+        logits = self.lm_head(embeddings)
+        return logits
+
+
+    def get_loss(self, logits, labels, ignore_index=-100):
+        loss = None
+        if labels is not None:
+            # Shift so that tokens < n predict n
+            shift_logits = logits[..., :-1, :].contiguous()
+            shift_labels = labels[..., 1:].contiguous()
+            # Flatten the tokens
+            loss_fct = nn.CrossEntropyLoss(ignore_index=ignore_index)
+            loss = loss_fct(shift_logits.view(-1, shift_logits.size(-1)), shift_labels.view(-1))
+        
+        return loss
+    
+    def get_embedding(self, x, attention_mask):
         # x: [batch_size, seq_len]
         # attention_mask: [batch_size, seq_len]
         token_embeddings = self.token_embedding_table(x)
@@ -223,28 +242,30 @@ class UMLGPT(nn.Module):
         for block in self.blocks:
             embeddings = block(embeddings, attention_mask)
 
-        embeddings = self.ln_f(embeddings)  
-        logits = self.lm_head(embeddings)
-        return logits
-    
-    def get_loss(self, logits, labels, ignore_index=-100):
-        loss = None
-        if labels is not None:
-            # Shift so that tokens < n predict n
-            shift_logits = logits[..., :-1, :].contiguous()
-            shift_labels = labels[..., 1:].contiguous()
-            # Flatten the tokens
-            loss_fct = nn.CrossEntropyLoss(ignore_index=ignore_index)
-            loss = loss_fct(shift_logits.view(-1, shift_logits.size(-1)), shift_labels.view(-1))
-        
-        return loss
+        embeddings = self.ln_f(embeddings)
+        return embeddings
+
 
     def get_model_size(self):
         return sum(p.numel() for p in self.parameters() if p.requires_grad)
     
     def __repr__(self):
-        """Print number of trainable parameters in Millions"""
-        return f"UMLGPT({self.get_model_size() / 1000000:.3f}M params)"
+        return super().__repr__() + f'\nNumber of parameters: {self.get_model_size() / 1000000:.3f}M'
+    
+    @staticmethod
+    def from_pretrained(state_dict_pth):
+        state_dict = torch.load(state_dict_pth, map_location=device)
+        vocab_size, embed_dim = [s.shape for _, s in state_dict.items() if 'token_embedding_table' in _][0]
+        num_heads = max([int(name.split('.sa.heads.')[1].split('.')[0]) for name, s in state_dict.items() if '.sa.heads.' in name]) + 1
+        block_size = [s.shape[0] for _, s in state_dict.items() if 'position_embedding_table' in _][0]
+        num_layers = max([int(name.split('blocks.')[1].split('.')[0]) for name, s in state_dict.items() if 'blocks.' in name]) + 1
+        model = UMLGPT(vocab_size, embed_dim, block_size, num_layers, num_heads)
+        model.load_state_dict(state_dict)
+        return model
+    
+    
+    
+
     
 
 class UMLGPTClassifier(nn.Module):
@@ -288,3 +309,8 @@ class UMLGPTClassifier(nn.Module):
     
     def __repr__(self):
         return super().__repr__() + f'\nNumber of parameters: {self.get_model_size()/1000000:.3f}M'
+    
+    @staticmethod
+    def from_pretrained(state_dict, num_classes):
+        model = UMLGPTClassifier(UMLGPT.from_pretrained(state_dict), num_classes)
+        return model
