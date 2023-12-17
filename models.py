@@ -226,6 +226,18 @@ class UMLGPT(nn.Module):
         embeddings = self.ln_f(embeddings)  
         logits = self.lm_head(embeddings)
         return logits
+    
+    def get_loss(self, logits, labels, ignore_index=-100):
+        loss = None
+        if labels is not None:
+            # Shift so that tokens < n predict n
+            shift_logits = logits[..., :-1, :].contiguous()
+            shift_labels = labels[..., 1:].contiguous()
+            # Flatten the tokens
+            loss_fct = nn.CrossEntropyLoss(ignore_index=ignore_index)
+            loss = loss_fct(shift_logits.view(-1, shift_logits.size(-1)), shift_labels.view(-1))
+        
+        return loss
 
     def get_model_size(self):
         return sum(p.numel() for p in self.parameters() if p.requires_grad)
@@ -235,3 +247,44 @@ class UMLGPT(nn.Module):
         return f"UMLGPT({self.get_model_size() / 1000000:.3f}M params)"
     
 
+class UMLGPTClassifier(nn.Module):
+
+    def __init__(self, model, num_classes):
+        super().__init__()
+        
+        self.model = model
+        _, embed_dim = self.model.lm_head.weight.data.shape
+        self.classifier = FeedFoward(input_dim=embed_dim, num_classes=num_classes)
+        self.apply(weights_init)
+
+    def forward(self, x, attention_mask, pool=None):
+        # x: [batch_size, seq_len]
+        # attention_mask: [batch_size, seq_len]
+        lm_logits = self.model.get_embedding(x, attention_mask)
+        if pool:
+            """Pool the logits across the sequence dimension"""
+            lm_logits = torch.mean(lm_logits, dim=1)
+        else:
+            """Use the logits at the last position"""
+            lm_logits = lm_logits[:, -1, :]
+        
+        logits = self.classifier(lm_logits)
+        return logits
+    
+    def get_loss(self, logits, labels):
+        logits = logits.to(device)
+        labels = labels.to(device)
+
+        if len(labels.shape) == 1:
+            loss_fct = torch.nn.CrossEntropyLoss()
+            loss = loss_fct(logits, labels)
+        else:
+            loss_fct = torch.nn.BCEWithLogitsLoss()
+            loss = loss_fct(logits.float(), labels.float())
+        return loss
+
+    def get_model_size(self):
+        return sum(p.numel() for p in self.parameters() if p.requires_grad)
+    
+    def __repr__(self):
+        return super().__repr__() + f'\nNumber of parameters: {self.get_model_size()/1000000:.3f}M'

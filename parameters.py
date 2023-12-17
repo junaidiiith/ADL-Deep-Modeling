@@ -21,6 +21,7 @@ def parse_args():
     
 
     parser.add_argument("--trainer", type=str, choices=['PT', 'CT', 'HFGPT'], default='HFGPT')
+    parser.add_argument("--class_type", type=str, choices=['super', 'entity'], default='super')
 
     parser.add_argument("--multi_label", action="store_true")
 
@@ -28,6 +29,9 @@ def parse_args():
     parser.add_argument("--embed_dim", type=int, default=128)
     parser.add_argument("--num_layers", type=int, default=4)
     parser.add_argument("--num_heads", type=int, default=8)
+    parser.add_argument("--block_size", type=int, default=512)
+
+    parser.add_argument("--pretrained", action="store_true")
     
     
 

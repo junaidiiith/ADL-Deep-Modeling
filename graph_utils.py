@@ -5,6 +5,7 @@ import pickle
 import random
 from sklearn.model_selection import train_test_split
 from tqdm.auto import tqdm
+from utils import clean_text
 
 
 edge_name = lambda g, edge: g.edges[edge]['name'] if 'name' in g.edges[edge] else ''
@@ -103,9 +104,9 @@ def get_graph_data(graphs_file, max_super_types=5, seed=42):
     train_triples = get_node_triples_from_graphs(train_graphs_masked)
     test_triples = get_node_triples_from_graphs(test_graphs_masked)
 
-    all_entities = [t[0] for t in train_triples] + [t[0] for t in test_triples]
-    all_super_types = [st for t in train_triples for st in t[2].split(', ')]\
-          + [st for t in test_triples for st in t[2].split(', ')]
+    all_entities = [clean_text(t[0]) for t in train_triples] + [clean_text(t[0]) for t in test_triples]
+    all_super_types = [clean_text(st) for t in train_triples for st in t[2].split(', ')]\
+          + [clean_text(st) for t in test_triples for st in t[2].split(', ')]
 
     all_entities_count = Counter(all_entities)
     all_super_types_count = Counter(all_super_types)
@@ -115,6 +116,9 @@ def get_graph_data(graphs_file, max_super_types=5, seed=42):
 
     entities_encoder = {v: i for i, v in enumerate(all_entities_count.keys())}
     super_types_encoder = {v: i for i, v in enumerate(all_super_types_count.keys())}
+
+    # for x in train_triples + test_triples:
+    #     assert f"{clean_text(x[2])}".split() == x[2].replace(",", "").split(), f"{f'{clean_text(x[2])}'.split()} != {x[2].replace(' ', '').split()}"
 
     data = {
         'train_graphs': train_graphs,

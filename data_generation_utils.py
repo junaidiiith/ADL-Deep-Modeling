@@ -6,7 +6,7 @@ from tqdm.auto import tqdm
 from nltk.tokenize import word_tokenize
 import torch
 import numpy as np
-
+from utils import clean_text
 
 
 SSP = "<superType>"
@@ -26,7 +26,7 @@ SEP = "<sep>"
 
 SPECIAL_TOKENS = [PAD, UNK, SOS, EOS, MASK, SEP, SSP, ESP, SEN, EEN, SRP, ERP]
 
-clean_text = lambda x: re.sub(r'[^a-zA-Z0-9\s]', '', x).strip()
+
 
 promptize_triple = lambda x: f"{SOS} {SSP} {clean_text(x[2])} {ESP} {SEN} {clean_text(x[0])} {EEN} {SRP} {clean_text(x[1])} {ERP} {EOS}"
 
@@ -65,7 +65,8 @@ def get_promptized_data_for_super_type_generation(data):
 
 def get_promptized_data_for_entity_generation(data):
     promptized_data = {
-        split_type: remove_duplicates([promptize_entity_type_generation(i) for i in data[split_type] if len(i[1].strip())])\
+        split_type: remove_duplicates(
+            [promptize_entity_type_generation(i) for i in data[split_type] if len(i[1].strip())])\
               for split_type in data
     }
     # print_sample_data(promptized_data)
@@ -73,7 +74,8 @@ def get_promptized_data_for_entity_generation(data):
 
 def get_promptized_data_for_super_type_classification(data):
     promptized_data = {
-        split_type: remove_duplicates([promptize_super_type_classification(i) for i in data[split_type] if len(i[2].strip())])\
+        split_type: remove_duplicates(
+            [promptize_super_type_classification(i) for i in data[split_type] if len(i[2].strip())])\
               for split_type in data
     }
     print_sample_data(promptized_data)
@@ -99,6 +101,21 @@ def get_promptized_data_for_generation(data):
     print_sample_data(promptized_data)
     
     return promptized_data
+
+
+def get_data_for_classification(data, class_type='super'):
+    if class_type == 'super':
+        promptized_data = get_promptized_data_for_super_type_classification(data)
+    else:
+        promptized_data = get_promptized_data_for_entity_classification(data)
+    return promptized_data
+
+
+def get_classification_dataset(data, tokenizer, encoder, class_type='super', multi_label=False):
+    if class_type == 'super':
+        return get_super_type_classification_dataset(data, tokenizer, encoder, multi_label=multi_label)
+    else:
+        return get_entity_classification_dataset(data, tokenizer, encoder)
 
 
 def get_super_type_labels(super_types, super_type_map, multi_label=False):
@@ -129,6 +146,9 @@ def get_encoding_size(data, tokenizer):
 def get_pretrained_lm_tokenizer(model_name, special_tokens=SPECIAL_TOKENS):
     tokenizer = AutoTokenizer.from_pretrained(model_name)
     tokenizer.add_special_tokens({'additional_special_tokens': special_tokens})
+    if tokenizer.pad_token is None:
+        tokenizer.pad_token = "<pad>"
+
     print("Vocab size: ", len(tokenizer))
     return tokenizer
 
@@ -351,6 +371,7 @@ class SuperTypeClassificationDataset(Dataset):
         self.labels = get_super_type_labels(super_type_labels, super_type_map, multi_label=multi_label)
         self.i2c = {v: k for k, v in super_type_map.items()}
         self.multi_label = multi_label
+        self.num_classes = len(super_type_map)
     
     def __len__(self):
         return len(self.data)
@@ -376,6 +397,7 @@ class EntityClassificationDataset(Dataset):
             self.inputs = tokenizer(entity_inputs, padding=True, return_tensors='pt', max_length=max_token_length, truncation=True)
         self.labels = [label_map[i] for i in entity_labels]
         self.i2c = {v: k for k, v in label_map.items()}
+        self.num_classes = len(label_map)
         
     
     def __len__(self):
