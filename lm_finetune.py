@@ -102,7 +102,6 @@ def fine_tune_hugging_face(dataset, tokenizer, args):
         train_dataset=dataset['train'],
         eval_dataset=dataset['test'],
         tokenizer=tokenizer,
-        compute_metrics=compute_metrics,
     )
     for cb in trainer.callback_handler.callbacks:
         if isinstance(cb, transformers.integrations.NeptuneCallback):

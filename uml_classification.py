@@ -38,8 +38,6 @@ if __name__ == '__main__':
     args = parse_args()
 
     args.special_tokens = SPECIAL_TOKENS
-    if args.trainer != 'HFGPT':
-        assert args.from_pretrained is not None, "Please specify a pretrained model to use for classification"
     
     data_dir = args.data_dir
     args.graphs_file = os.path.join(data_dir, args.graphs_file)
