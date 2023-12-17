@@ -1,18 +1,13 @@
+from sklearn.model_selection import StratifiedKFold
 from sklearn.preprocessing import MultiLabelBinarizer
-from transformers import AutoTokenizer, BertTokenizerFast
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import Dataset
 import evaluate
-from transformers import GPT2ForSequenceClassification, GPT2Config, AutoModelForSequenceClassification
-import dgl
 from sklearn.metrics import accuracy_score
 import torch
 import re
-import random
 from tqdm.auto import tqdm
-import networkx as nx
-from collections import Counter, defaultdict
+from collections import defaultdict
 import numpy as np
-from graph_utils import get_node_text_triples
 
 
 
@@ -20,71 +15,83 @@ vector_file_prefix = "word2vec_models/vectors_"
 
 
 SEP = "[SEP]"
-STEREOTYPE = "[STEREOTYPE]"
 
 e_s = {'rel': 'relates', 'gen': 'generalizes'}
 remove_extra_spaces = lambda txt: re.sub(r'\s+', ' ', txt.strip())
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-frequent_stereotypes = ['kind', 'subkind', 'phase', 'role', 'category', 'mixin', 'rolemixin', 'phasemixin']
-
 
 
 class TripleDataset(Dataset):
-    def __init__(self, triples, entity_map, stereotype_map, tokenizer, multi_label=True):
+    def __init__(self, triples, entity_map, super_type_map, tokenizer, multi_label=True):
         self.labels = torch.from_numpy(np.array([entity_map[t[0]] for t in triples]))
-        self.stereotype_labels = get_stereotype_labels(triples, stereotype_map, multi_label)
+        self.super_type_labels = get_super_type_labels(triples, super_type_map, multi_label)
         
-        triples = [f'{tokenizer.mask_token} {t[1]} {t[2]}' for t in triples]
-        self.tokenized = tokenizer(triples, padding=True, return_tensors='pt')
+        entity_triples = [f'{tokenizer.mask_token} {t[1]} | {t[2]}'.strip() for t in triples]
+        max_token_length, _, _ = get_encoding_size(entity_triples, tokenizer)
+        self.entity_tokenized = tokenizer(
+            entity_triples, padding=True, return_tensors='pt', max_length=max_token_length, truncation=True)
+
+
+        super_type_triples = [f'{t[0]} {t[1]}'.strip() for t in triples]
+        max_token_length, _, _ = get_encoding_size(super_type_triples, tokenizer)
+        self.super_type_tokenized = tokenizer(
+            super_type_triples, padding=True, return_tensors='pt', max_length=max_token_length, truncation=True)
+        
+        self.entity_mask = torch.from_numpy(np.array([len(t[1].strip()) != 0 for t in triples]))
+        self.super_type_mask = torch.from_numpy(np.array([len(t[2].strip()) != 0 for t in triples]))
 
         self.entity_map = entity_map
-        self.stereotype_map = stereotype_map
+        self.super_type_map = super_type_map
 
     @property
     def num_labels(self):
-        return max(self.labels) + 1
+        return len(self.entity_map)
 
     @property
-    def num_stereotype_labels(self):
-        if len(self.stereotype_labels.shape) == 1:
-            return max(self.stereotype_labels) + 1
-        return self.stereotype_labels.shape[1]
+    def num_super_type_labels(self):
+        return len(self.super_type_map)
 
     def __len__(self):
         return len(self.labels)
 
     def __getitem__(self, idx):
         inputs = {
-            'input_ids': self.tokenized['input_ids'][idx],
-            'attention_mask': self.tokenized['attention_mask'][idx],
-            'labels': self.labels[idx],
+            'entity_input_ids': self.entity_tokenized['input_ids'][idx],
+            'entity_attention_mask': self.entity_tokenized['attention_mask'][idx],
+            'super_type_input_ids': self.super_type_tokenized['input_ids'][idx],
+            'super_type_attention_mask': self.super_type_tokenized['attention_mask'][idx],
+            'entity_mask': self.entity_mask[idx],
+            'super_type_mask': self.super_type_mask[idx],
+            'entity_label': self.labels[idx],
+            'super_type_label': self.super_type_labels[idx],
         }
-        entity_label = self.labels[idx]
-        stereotype_label = self.stereotype_labels[idx]
 
-        return inputs, entity_label, stereotype_label
+        return inputs
 
 
+class TaskTypeDataset(Dataset):
+    def __init__(self, inputs, task_type='entity'):
+        mask = inputs[f'{task_type}_mask']
+        self.labels = inputs[f'{task_type}_label'][mask]
+        self.input_ids = inputs[f'{task_type}_input_ids'][mask]
+        self.attention_mask = inputs[f'{task_type}_attention_mask'][mask]
 
-class EncodingsDataset(Dataset):
-    def __init__(self, encodings):
-        self.encodings = encodings
-
+    
     def __len__(self):
-        return len(self.encodings["input_ids"])
+        return len(self.labels)
 
     def __getitem__(self, idx):
-        output = {
-            "input_ids": self.encodings["input_ids"][idx],
-            "attention_mask": self.encodings["attention_mask"][idx],
+        inputs = {
+            'input_ids': self.input_ids[idx],
+            'attention_mask': self.attention_mask[idx],
+            'labels': self.labels[idx],
         }
-        if 'token_type_ids' in self.encodings:
-            output['token_type_ids'] = self.encodings['token_type_ids'][idx]
-        if 'labels' in self.encodings:
-            output['labels'] = self.encodings['labels'][idx]
-        return output
+
+        return inputs
+
+
 
 
 accuracy = evaluate.load("accuracy")
@@ -101,19 +108,8 @@ def init_glove_model(model_type):
 
 
 def get_encoding_size(triples, tokenizer, allowed_perc=0.005):
-    single_encodings_map = defaultdict(int)
-    if isinstance(triples[0], tuple):
-        triples = [t[0] for t in triples]
-        
-    for triple in triples:
-        single_encodings_map[len(tokenizer(triple)['input_ids'])] += 1
-
-    values = sorted(single_encodings_map.items(), key=lambda x: x[0], reverse=True)
-    for sz, _ in values:
-        truncations = sum(v for k, v in single_encodings_map.items() if k >= sz)
-        perc = truncations / len(triples)
-        if perc >= allowed_perc:
-            return sz, truncations, values
+    lengths = [len(tokenizer.encode(t)) for t in triples]
+    return int(np.percentile(lengths, 100 - allowed_perc)), np.max(lengths), np.mean(lengths)
 
 
 def get_accuracy(tokenizer, mask_filler_pipe, dataset):
@@ -225,189 +221,6 @@ def get_w2v_embeddings(graph, w2v_model, uncased=True):
     return torch.from_numpy(node_embeddings)
 
 
-def get_bert_embeddings(nxg, tokenizer_model, distance, only_name=False):
-    tokenizer, model = tokenizer_model
-    node_texts = get_node_text_triples(nxg, distance=distance, only_name=only_name)
-    dataset = get_triples_dataset(node_texts, tokenizer, max_length=512)
-    # node_embeddings = torch.randn(len(nxg.nodes), 768)
-    dataloader = DataLoader(dataset, batch_size=32, shuffle=False)
-    node_embeddings = get_node_embeddings(model, dataloader)
-    return node_embeddings
-
-
-def get_w2v_embeddings_with_context(graph, w2v_model, distance, only_name=False):
-    vocab, W = w2v_model
-    node_texts = get_node_text_triples(graph, distance=distance, only_name=only_name)
-    node_embeddings = list()
-    for node_text in node_texts:
-        name_parts = node_text.lower().split()
-        embeddings = list()
-        for part in name_parts:
-            if part in vocab:
-                embeddings.append(W[vocab[part]])
-            else:
-                embeddings.append(np.zeros(W.shape[1]))
-        if len(embeddings) == 0:
-            embeddings.append(np.zeros(W.shape[1]))
-    
-        embeddings = np.array(embeddings)
-        embeddings = np.mean(embeddings, axis=0)
-        node_embeddings.append(embeddings)
-
-    node_embeddings = np.array(node_embeddings)
-    return torch.from_numpy(node_embeddings)
-
-
-def get_bert_tokenizer_model(model_name, num_classes):
-    tokenizer = get_tokenizer(model_name)
-    model = get_classification_model(model_name, num_classes, tokenizer)
-    if model.device != device:
-        model.to(device)
-    return tokenizer, model
-
-
-
-def create_dgl_from_nx(nxg, lbl_encoder, node_embeddings):
-    dgl_graph = dgl.from_networkx(nxg)
-    dgl_graph = dgl.add_self_loop(dgl_graph)
-    dgl_graph.ndata['feat'] = node_embeddings
-
-    labels = [lbl_encoder[nxg.nodes[node]['stereotype']] if 'masked' in nxg.nodes[node] else -1 for node in nxg.nodes]
-    dgl_graph.ndata['labels'] = torch.tensor(labels)
-
-    train_nodes = [node for node in nxg.nodes if 'masked' in nxg.nodes[node] and not nxg.nodes[node]['masked']]
-    test_nodes = [node for node in nxg.nodes if 'masked' in nxg.nodes[node] and nxg.nodes[node]['masked']]
-
-    train_mask = torch.zeros(len(nxg.nodes), dtype=torch.bool)
-    train_mask[train_nodes] = True
-    test_mask = torch.zeros(len(nxg.nodes), dtype=torch.bool)
-    test_mask[test_nodes] = True
-
-    dgl_graph.ndata['train_mask'] = train_mask
-    dgl_graph.ndata['test_mask'] = test_mask
-    return dgl_graph
-
-
-def get_embedding_model(model_name, label_encoder):
-    if 'bert' in model_name:
-        print("Loading bert model...", model_name)
-        model = get_bert_tokenizer_model(model_name, len(label_encoder))
-        print("Bert model loaded.", model_name)
-    else:
-        print("Loading word2vec model...", model_name)
-        model = init_glove_model(model_name)
-        print("Word2vec model loaded.", model_name)
-    return model
-
-
-def create_dgl_graphs(graphs, lbl_encoder, model_name, distance, use_context=False):
-    graphs = [nx.convert_node_labels_to_integers(g) for g, _ in graphs]
-    graph_node_embeddings = get_graph_node_embeddings(graphs, lbl_encoder, model_name, distance, use_context=use_context)
-    dgl_graphs = list()
-    for graph, node_embeddings in zip(graphs, graph_node_embeddings):
-        dgl_graph = create_dgl_from_nx(graph, lbl_encoder, node_embeddings)
-        dgl_graphs.append(dgl_graph)
-    
-    return dgl_graphs
-
-
-def get_graph_node_embeddings(graphs, lbl_encoder, model_name, distance, use_context=False):
-    graph_node_embeddings = list()
-    model = get_embedding_model(model_name, lbl_encoder)
-    for graph in tqdm(graphs):
-        node_embeddings = get_bert_embeddings(graph, model, distance) if 'bert' in model_name\
-              else (get_w2v_embeddings(graph, model) if not use_context else get_w2v_embeddings_with_context(graph, model, distance))
-        graph_node_embeddings.append(node_embeddings)
-    return graph_node_embeddings
-
-
-def set_seed(seed):
-    print("Setting seed to", seed)
-    random.seed(seed)
-    np.random.seed(seed)
-    torch.manual_seed(seed)
-
-
-def get_classification_model(model_name, num_labels, tokenizer):
-    if 'bert' in model_name:
-        model = AutoModelForSequenceClassification.from_pretrained(pretrained_model_name_or_path=model_name, num_labels=num_labels, ignore_mismatched_sizes=True)
-        model.resize_token_embeddings(len(tokenizer))
-    else:
-        model_config = GPT2Config.from_pretrained(pretrained_model_name_or_path=model_name, num_labels=num_labels)
-        tokenizer.padding_side = "left"
-        model = GPT2ForSequenceClassification.from_pretrained(pretrained_model_name_or_path=model_name, config=model_config)
-        model.resize_token_embeddings(len(tokenizer)) 
-        model.config.pad_token_id = model.config.eos_token_id
-        
-    return model
-
-
-def get_node_embeddings(model, dataloader):
-    embedding_keys = ['input_ids', 'attention_mask']
-    node_embeddings = list()
-    with torch.no_grad():
-        # for batch in tqdm(dataloader):
-        for batch in dataloader:
-            batch = {k: v.to(device) for k, v in batch.items() if k in embedding_keys}
-            outputs = model.base_model(**batch)
-            try:
-                node_embeddings.append(outputs.pooler_output.detach().cpu())
-            except AttributeError:
-                node_embeddings.append(outputs.last_hidden_state[:, 0, :].detach().cpu())
-    return torch.cat(node_embeddings, dim=0)
-
-
-def get_label_encoder(graphs, exclude_limit):
-    stereotypes = defaultdict(int)
-    for g, _ in graphs:
-        for node in g.nodes:
-            if 'stereotype' in g.nodes[node]:
-                stereotypes[g.nodes[node]['stereotype']] += 1
-
-
-    if exclude_limit != -1:
-        stereotypes_classes = [stereotype for stereotype, _ in filter(lambda x: x[1] > exclude_limit, stereotypes.items())]
-    else:
-        stereotypes_classes = [stereotype for stereotype, _ in filter(lambda x: x[0] in frequent_stereotypes, stereotypes.items())]
-    # print(len(stereotypes_classes))
-    label_encoder = {label: i for i, label in enumerate(stereotypes_classes)}
-    return label_encoder
-
-
-def get_tokenizer(model_name):
-    if 'bert' in model_name:
-        tokenizer = BertTokenizerFast.from_pretrained('bert-base-uncased')
-    else:
-        tokenizer = AutoTokenizer.from_pretrained(model_name)
-
-    if tokenizer.pad_token is None:
-        tokenizer.add_special_tokens({'pad_token': '[PAD]'})
-    if tokenizer.mask_token is None:
-        tokenizer.add_special_tokens({'mask_token': '[MASK]'})
-    
-    # tokenizer.add_special_tokens({'additional_special_tokens': [PATH_SEP]})
-    
-    return tokenizer
-
-
-def get_graphs_info(graphs):
-    masked = sum(1 for g, _ in graphs for n in g.nodes if 'masked' in g.nodes[n] and g.nodes[n]['masked'])
-    not_masked = sum(1 for g, _ in graphs for n in g.nodes if 'masked' in g.nodes[n] and not g.nodes[n]['masked'])
-    total_stereotypes = masked + not_masked
-    total_nodes = sum(1 for g, _ in graphs for n in g.nodes)
-    # print(f'Masked nodes: {masked}, Unmasked nodes: {not_masked}, Total stereotype nodes: {total_stereotypes}, Total nodes: {total_nodes}')
-    # print(f'Percentage of masked nodes: {masked/total_stereotypes:.2f}')
-    # print(f'Percentage of unmasked nodes: {not_masked/total_stereotypes:.2f}')
-    info = {
-        'num_nodes': total_nodes,
-        'num_stereotype_nodes': total_stereotypes,
-        'num_masked_nodes': masked,
-        'num_unmasked_nodes': not_masked,
-        'num_graphs': len(graphs),
-    }
-    return info
-
-
 def pad_1d_tensors(tensors_list, padding_token):
     max_length = max(tensor.shape[0] for tensor in tensors_list)
     padded_tensors = []
@@ -420,26 +233,6 @@ def pad_1d_tensors(tensors_list, padding_token):
         padded_tensors.append(padded_tensor)
 
     return torch.stack(padded_tensors)
-
-
-def get_triples_dataset(triples, tokenizer, max_length):
-    max_length = max_length if max_length < 512 else 512
-    encodings = tokenizer(triples, truncation=True, padding=True, max_length=max_length, return_tensors='pt')
-    dataset = EncodingsDataset(encodings)
-    return dataset
-
-
-def get_predictions_distribution(preds, acts):
-    correct_preds = [preds[i] for i in range(len(preds)) if preds[i] == acts[i] if acts[i] != -1]
-    incorrect_preds = [preds[i] for i in range(len(preds)) if preds[i] != acts[i] if acts[i] != -1]
-    correct_preds = Counter(correct_preds)
-    incorrect_preds = Counter(incorrect_preds)
-    predictions = {
-        'correct': correct_preds,
-        'incorrect': incorrect_preds,
-    }
-    return predictions
-
 
 
 def get_recommendation_metrics(logits, labels):
@@ -552,18 +345,22 @@ def get_recommendation_metrics_multi_label(logits, labels):
     
     
 
-def get_stereotype_labels(triples, stereotype_map, multi_label=True):
-    stp_labels = [[stereotype_map[j] for j in i[3].split(', ') if len(j.strip())] for i in triples]
+def get_super_type_labels(triples, super_type_map, multi_label=False):
+    stp_labels = [[super_type_map[j] for j in i[2].split(', ')] for i in triples]
     if not multi_label:
-        stp_labels = np.array([i[0]+1 if len(i) else 0 for i in stp_labels])
-
+        stp_labels = np.array([i[0] if len(i) else 0 for i in stp_labels])
         stp_labels = torch.from_numpy(stp_labels)
     else:
-        mlb = MultiLabelBinarizer()
-        stp_labels = torch.from_numpy(mlb.fit_transform(stp_labels))
+        l = list()
+        for stp_label in stp_labels:
+            row = torch.zeros(len(super_type_map))
+            for label in stp_label:
+                row[label] = 1
+            l.append(row)
+            
+        stp_labels = torch.stack(l)
         
     return stp_labels
-
 
 
 
