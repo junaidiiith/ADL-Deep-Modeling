@@ -195,16 +195,20 @@ class Block(nn.Module):
 
 class UMLGPT(nn.Module):
 
-    def __init__(self, vocab_size, embed_dim, block_size, n_layer, n_head):
+    def __init__(self, vocab_size, embed_dim, block_size, n_layer, n_head, load_pretrained_from=None):
         super().__init__()
         # each token directly reads off the logits for the next token from a lookup table
-        self.token_embedding_table = nn.Embedding(vocab_size, embed_dim)
-        self.position_embedding_table = nn.Embedding(block_size, embed_dim)
-        self.blocks = nn.Sequential(*[Block(embed_dim, n_head) for _ in range(n_layer)])
-        self.ln_f = nn.LayerNorm(embed_dim) # final layer norm
-        self.lm_head = nn.Linear(embed_dim, vocab_size)
 
-        self.apply(weights_init)
+        if load_pretrained_from is not None:
+            self.load_pretrained(load_pretrained_from)
+        else:
+            self.token_embedding_table = nn.Embedding(vocab_size, embed_dim)
+            self.position_embedding_table = nn.Embedding(block_size, embed_dim)
+            self.blocks = nn.Sequential(*[Block(embed_dim, n_head) for _ in range(n_layer)])
+            self.ln_f = nn.LayerNorm(embed_dim) # final layer norm
+            self.lm_head = nn.Linear(embed_dim, vocab_size)
+
+            self.apply(weights_init)
 
     def forward(self, x, attention_mask):
         # x: [batch_size, seq_len]
@@ -222,3 +226,12 @@ class UMLGPT(nn.Module):
         embeddings = self.ln_f(embeddings)  
         logits = self.lm_head(embeddings)
         return logits
+
+    def get_model_size(self):
+        return sum(p.numel() for p in self.parameters() if p.requires_grad)
+    
+    def __repr__(self):
+        """Print number of trainable parameters in Millions"""
+        return f"UMLGPT({self.get_model_size() / 1000000:.3f}M params)"
+    
+

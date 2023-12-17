@@ -28,10 +28,8 @@ if __name__ == '__main__':
 
     print("Initializing...")
 
-    if args.trainer == 'PT':
-        train_umlgpt(dataset, 'PT', args)
-    elif args.trainer == 'CT':
-        train_umlgpt(dataset, 'CT', args)
+    if args.trainer in ['PT', 'CT']:
+        train_umlgpt(dataset, args)
     elif args.trainer == 'HFGPT':
         train_hugging_face_gpt(dataset, args)
 

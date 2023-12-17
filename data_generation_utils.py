@@ -121,7 +121,9 @@ def get_super_type_labels(super_types, super_type_map, multi_label=False):
 def get_encoding_size(data, tokenizer):
     tokens = tokenizer(data)
     lengths = [len(i) for i in tokens['input_ids']]
-    return int(np.percentile(lengths, 99.95))
+    size = int(np.percentile(lengths, 99.5))
+    print("Encoding size: ", size)
+    return size
 
 
 def get_pretrained_lm_tokenizer(model_name, special_tokens=SPECIAL_TOKENS):
@@ -138,7 +140,7 @@ def get_word_tokenizer_tokenizer(data, lower=True, special_tokens=SPECIAL_TOKENS
 
 def get_generative_uml_dataset(data, tokenizer):
     dataset = {
-        split_type: GenerativeUMLDataset(data[split_type][:100], tokenizer) for split_type in data
+        split_type: GenerativeUMLDataset(data[split_type], tokenizer) for split_type in data
     }
     return dataset
 
@@ -320,8 +322,6 @@ class GenerativeUMLDataset(Dataset):
             max_token_length = get_encoding_size(data, tokenizer)
             self.inputs = tokenizer(data, padding=True, return_tensors='pt', max_length=max_token_length, truncation=True)
         self.labels = self.inputs['input_ids'].clone()
-        self.labels[:, :-1] = self.labels[:, 1:].clone()
-        self.labels[:, -1] = tokenizer.pad_token_id
         self.labels[self.labels == tokenizer.pad_token_id] = -100
 
         # print(self.labels[0].shape)
