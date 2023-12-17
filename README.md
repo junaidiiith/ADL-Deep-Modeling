@@ -113,3 +113,44 @@ The successful completion of this project will result in the following outcomes:
 [[4] Yang, Song, and Houari Sahraoui. &#34;Towards automatically extracting UML class diagrams from natural language specifications.&#34; Proceedings of the 25th International Conference on Model Driven Engineering Languages and Systems: Companion Proceedings. 2022.](https://dl.acm.org/doi/pdf/10.1145/3550356.3561592)
 
 [[5] López, José Antonio Hernández, Javier Luis Cánovas Izquierdo, and Jesús Sánchez Cuadrado. "ModelSet: a dataset for machine learning in model-driven engineering." Software and Systems Modeling (2022): 1-20.](https://link.springer.com/article/10.1007/s10270-021-00929-3)
+
+
+All Run Configurations for UML Entity and Supertype classification task
+
+1. Pretraining with PLM Tokenizer and UMLGPT
+2. Pretraining with word tokenizer and UMLGPT
+3. Pretraining with PLM
+
+4. Classification directly with PLM Tokenizer and UMLGPT
+   4. Entity Classification
+   5. Super type Classification - single label
+   6. Super type Classification - multi label
+
+7. Classification directly with word Tokenizer and UMLGPT
+   7. Entity Classification
+   8. Super type Classification - single label
+   9. Super type Classification - multi label
+
+10. Classification directly with PLM
+   10. Entity Classification
+   11. Super type Classification - single label
+
+
+12. Classification with pretrained UMLGPT and PLM Tokenizer
+   12. Entity Classification
+   13. Super type Classification - single label
+   14. Super type Classification - multi label
+
+
+15. Classification with pretrained UMLGPT and PLM Tokenizer
+   15. Entity Classification
+   16. Super type Classification - single label
+   17. Super type Classification - multi label
+
+
+18. Classification with pretrained PLM and PLM Tokenizer
+   18. Entity Classification
+   19. Super type Classification - single label
+
+   
+
