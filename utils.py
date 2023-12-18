@@ -1,6 +1,10 @@
 import math
+import os
+import random
 import numpy as np
 import re
+
+import torch
 
 
 clean_text = lambda x: re.sub(r'[^a-zA-Z0-9\s]', '', x).strip()
@@ -131,3 +135,47 @@ def compute_metrics(eval_preds):
     logits, labels = eval_preds
     recommendation_metrics = get_recommendation_metrics(logits, labels)
     return recommendation_metrics
+
+
+def set_seed(seed):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+
+
+def create_run_config(args):
+    set_seed(args.seed)
+    config = {
+        'batch_size': args.batch_size,
+        'num_epochs': args.num_epochs,
+        'lr': args.lr,
+        'warmup_steps': args.warmup_steps,
+        'embed_dim': args.embed_dim,
+        'num_layers': args.num_layers,
+        'num_heads': args.num_heads,
+        'block_size': args.block_size,
+        'trainer': args.trainer,
+        'class_type': args.class_type,
+        'multi_label': args.multi_label,
+        'gpt_model': args.gpt_model,
+        'tokenizer': args.model_name,
+    }
+
+    file_name = f"{args.class_type}_{args.trainer}_{args.gpt_model}_{args.model_name}"
+    
+    if args.multi_label:
+        file_name += "_multi_label"
+    
+    os.makedirs(os.path.join(args.log_dir, 'runs', file_name), exist_ok=True)
+    args.log_dir = os.path.join(args.log_dir, 'runs', file_name)
+    
+    os.makedirs(os.path.join('results', file_name), exist_ok=True)
+    args.results_dir = os.path.join('results', file_name)
+    
+    os.makedirs(os.path.join(args.models_dir, file_name), exist_ok=True)
+    args.models_dir = os.path.join(args.models_dir, file_name)
+
+    args.config_file_name = file_name
+
+    return config

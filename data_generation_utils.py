@@ -1,6 +1,5 @@
 from sklearn.model_selection import StratifiedKFold
 from torch.utils.data import Dataset, DataLoader
-import re
 from transformers import AutoTokenizer
 from tqdm.auto import tqdm
 from nltk.tokenize import word_tokenize

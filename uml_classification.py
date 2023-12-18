@@ -13,6 +13,7 @@ from trainers import get_tokenizer
 from trainers import train_hf_for_classification
 
 from data_generation_utils import SPECIAL_TOKENS
+from utils import create_run_config
 
 
 def train_uml_gpt_classification(data, label_encoder, compute_metrics_fn, args):
@@ -22,7 +23,7 @@ def train_uml_gpt_classification(data, label_encoder, compute_metrics_fn, args):
     model = get_uml_gpt(len(tokenizer), args)
     uml_gpt_classifier = UMLGPTClassifier(model, len(label_encoder))
     uml_gpt_trainer = UMLGPTTrainer(uml_gpt_classifier, get_dataloaders(dataset), args, compute_metrics_fn=compute_metrics_fn)
-    uml_gpt_trainer.train(args.epochs)
+    uml_gpt_trainer.train(args.num_epochs)
 
 
 def pretrained_lm_sequence_classification(data, args):
@@ -36,6 +37,7 @@ def pretrained_lm_sequence_classification(data, args):
 
 if __name__ == '__main__':
     args = parse_args()
+    config = create_run_config(args)
 
     args.special_tokens = SPECIAL_TOKENS
     
@@ -51,7 +53,7 @@ if __name__ == '__main__':
     compute_metrics_fn = get_recommendation_metrics_multi_label if args.multi_label else get_recommendation_metrics
     label_encoder = super_types_map if args.class_type == 'super' else entity_map
 
-    if not args.pretrained:
+    if args.trainer in ['PT', 'CT']:
         train_uml_gpt_classification(data, label_encoder, compute_metrics_fn, args)
     else:
         pretrained_lm_sequence_classification(data, args)

@@ -4,11 +4,15 @@ from graph_utils import get_graph_data
 from trainers import train_umlgpt, train_hugging_face_gpt
 from data_generation_utils import get_kfold_data, get_promptized_data_for_generation
 from data_generation_utils import SPECIAL_TOKENS
-
+from utils import create_run_config
 
 
 if __name__ == '__main__':
     args = parse_args()
+    config = create_run_config(args)
+    print(config)
+
+
     data_dir = args.data_dir
     args.graphs_file = os.path.join(data_dir, args.graphs_file)
 
@@ -32,4 +36,3 @@ if __name__ == '__main__':
         train_umlgpt(dataset, args)
     elif args.trainer == 'HFGPT':
         train_hugging_face_gpt(dataset, args)
-

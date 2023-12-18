@@ -164,12 +164,20 @@ class MultiHeadAttention(nn.Module):
 class FeedFoward(nn.Module):
     """ a simple linear layer followed by a non-linearity """
 
-    def __init__(self, embed_dim, dropout=0.1):
+    def __init__(self, input_dim, embed_dim=None, num_classes=None, dropout=0.1):
         super().__init__()
+
+        if num_classes is None:
+            num_classes = input_dim if embed_dim is None else embed_dim
+
+        if embed_dim is None:
+            embed_dim = input_dim
+        
+        
         self.net = nn.Sequential(
-            nn.Linear(embed_dim, 4 * embed_dim),
+            nn.Linear(input_dim, 4 * embed_dim),
             nn.ReLU(),
-            nn.Linear(4 * embed_dim, embed_dim),
+            nn.Linear(4 * embed_dim, num_classes),
             nn.Dropout(dropout),
         )
 
@@ -264,10 +272,6 @@ class UMLGPT(nn.Module):
         return model
     
     
-    
-
-    
-
 class UMLGPTClassifier(nn.Module):
 
     def __init__(self, model, num_classes):

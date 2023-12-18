@@ -217,6 +217,7 @@ class LMTrainer:
 class UMLGPTTrainer:
     def __init__(self, model, dataloaders, args, compute_metrics_fn=None):
         self.model = model
+        self.model.to(device)
         self.lr = args.lr
         self.batch_size = args.batch_size
         self.dataloaders = dataloaders
@@ -226,7 +227,7 @@ class UMLGPTTrainer:
         self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(self.optimizer, T_max=args.num_epochs)
         self.writer = SummaryWriter(log_dir=args.log_dir)
         self.models_dir = args.models_dir
-        self.model_str = self.model_str = f'{self.model._get_name()}_Vocab{args.trainer}'
+        self.model_str = args.config_file_name
         self.compute_metrics_fn = compute_metrics_fn
     
     def train(self, epochs):
@@ -260,6 +261,9 @@ class UMLGPTTrainer:
 
             self.scheduler.step()
 
+            for metric in epoch_metrics:
+                epoch_metrics[metric] /= len(self.dataloaders['train'])
+
             self.write_metrics(epoch_metrics, epoch, 'train')
 
             test_loss = self.evaluate(epoch, 'test')
@@ -287,8 +291,7 @@ class UMLGPTTrainer:
             eval_metrics['loss'] += loss.item()
 
         for metric in eval_metrics:
-            if metric != 'loss':
-                eval_metrics[metric] /= len(self.dataloaders[split_type])
+            eval_metrics[metric] /= len(self.dataloaders[split_type])
 
         self.write_metrics(eval_metrics, epoch, split_type)
         return eval_metrics['loss']
@@ -323,17 +326,25 @@ class UMLGPTTrainer:
             print(f'{metric}: {metrics[metric]:.3f}', end=' ')
         print()
 
+        with open(os.path.join(self.args.results_dir, self.args.config_file_name), 'a') as f:
+            f.write(f'Epoch {epoch} {split_type} metrics: ')
+            for metric in metrics:
+                f.write(f'{metric}: {metrics[metric]:.3f} ')
+            f.write('\n')
+        
+        print(f"{split_type}: {metrics}")
+
 
 
 def get_uml_gpt(input_dim, args):
     embed_dim = args.embed_dim
     n_layer = args.num_layers
     n_head = args.num_heads
-    block_size = args.embed_dim // args.num_heads
+    block_size = args.block_size
 
     uml_gpt = UMLGPT(input_dim, embed_dim, block_size, n_layer, n_head)
     if args.from_pretrained is not None:
-        uml_gpt.load_state_dict(torch.load(os.path.join(args.models_dir, args.from_pretrained)))
+        uml_gpt = UMLGPT.from_pretrained(args.from_pretrained)
         print(f'Loaded pretrained model from {args.from_pretrained}')
     
     uml_gpt.to(device)
@@ -341,6 +352,7 @@ def get_uml_gpt(input_dim, args):
 
 
 def train_hugging_face_gpt(data, args):
+    results = dict()
     model_name = args.gpt_model
     tokenizer = get_pretrained_lm_tokenizer(model_name, special_tokens=args.special_tokens)
     model = AutoModelForCausalLM.from_pretrained(model_name)
@@ -393,14 +405,12 @@ def train_hugging_face_gpt(data, args):
     trainer.train()
 
     print('Evaluating on test set...')
-    trainer.evaluate(dataset['test'])
+    results['test'] = trainer.evaluate(dataset['test'])
 
     print('Evaluating on unseen set...')
-    trainer.evaluate(dataset['unseen'])
+    results['unseen'] = trainer.evaluate(dataset['unseen'])
 
-    trainer.save_model(os.path.join(args.log_dir, f'uml_{model_name}'))
-
-
+    trainer.save_model(os.path.join(args.log_dir, f'{args.config_file_name}_{model_name}'))
     print('Done!')
 
 
@@ -424,7 +434,7 @@ def train_umlgpt(dataset, args):
     tokenized_dataset = get_generative_uml_dataset(dataset, tokenizer)
     print("Done!")
 
-    uml_gpt = get_uml_gpt(tokenized_dataset, tokenizer, args)
+    uml_gpt = get_uml_gpt(len(tokenizer), args)
 
     print("Model initialized! with parameters:")
     print(uml_gpt)
@@ -452,18 +462,18 @@ def get_classification_model(model_name, num_labels, tokenizer):
     return model
 
 
-def train_hf_for_classification(tokenizer, dataset, args):
+def train_hf_for_classification(dataset, tokenizer, args):
     model_name = args.model_name
     batch_size = args.batch_size
     train, test, unseen = dataset['train'], dataset['test'], dataset['unseen']
     # Show the training loss with every epoch
-    logging_steps = len(train) // batch_size
+    logging_steps = 100
     print(f"Using model...{model_name}")
-    model = get_classification_model(model_name, len(dataset.num_labels), tokenizer)
+    model = get_classification_model(model_name, dataset['train'].num_classes, tokenizer)
     model.resize_token_embeddings(len(tokenizer))
     print("Finetuning model...")
     training_args = TrainingArguments(
-        output_dir=args.out_dir,
+        output_dir=args.models_dir,
         overwrite_output_dir=True,
         evaluation_strategy="epoch",
         save_strategy="epoch",
@@ -474,7 +484,7 @@ def train_hf_for_classification(tokenizer, dataset, args):
         per_device_eval_batch_size=batch_size,
         fp16=True,
         logging_steps=logging_steps,
-        num_train_epochs=1,
+        num_train_epochs=args.num_epochs,
         save_total_limit=2,
         load_best_model_at_end=True,
     )
@@ -493,8 +503,12 @@ def train_hf_for_classification(tokenizer, dataset, args):
 
     trainer.train()
     print("Evaluating on test set...")
-    print(trainer.evaluate(test))
-    print("Evaluating on unseen set...")
-    print(trainer.evaluate(unseen))
+    test_results = trainer.evaluate(test)
+    print(test_results)
 
-    trainer.save_model(os.path.join(args.out_dir, f'uml_{model_name}'))
+    print("Evaluating on unseen set...")
+    unseen_results = trainer.evaluate(unseen)
+    print(unseen_results)
+
+    trainer.save_model(os.path.join(args.log_dir, f'{args.config_file_name}_{model_name}'))
+    print("Done!")
