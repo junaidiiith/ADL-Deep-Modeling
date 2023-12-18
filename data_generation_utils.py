@@ -36,7 +36,7 @@ def promptize_entity_type_generation(x):
     return f"{SOS} {SSP} {clean_text(x[1])} {ESP} {SRP} {clean_text(x[1])} {ERP} {SEP} {SEN} {clean_text(x[0])} {EEN} {EOS}"
 
 def promptize_super_type_classification(x):
-    return f"{SOS} {SEN} {clean_text(x[0])} {EEN} {SRP} {clean_text(x[1])} {ERP} {EOS}", f"{clean_text(x[2])}".split()
+    return f"{SOS} {SEN} {clean_text(x[0])} {EEN} {SRP} {clean_text(x[1])} {ERP} {EOS}", f"{clean_text(x[2])}"
 
 def promptize_entity_type_classification(x):
     return f"{SOS} {SSP} {clean_text(x[1])} {ESP} {SRP} {clean_text(x[1])} {ERP} {EOS}", f"{clean_text(x[0])}"
@@ -207,7 +207,7 @@ def get_gpt2_dataset(data, tokenizer):
     return dataset
 
 
-def get_kfold_data(data, seed=42, test_size=0.1):
+def get_kfold_lm_data(data, seed=42, test_size=0.1):
 
     seen_graph_triples = data['train_triples']
     unseen_graph_triples = data['test_triples']
@@ -222,14 +222,41 @@ def get_kfold_data(data, seed=42, test_size=0.1):
         seen_train = [seen_graph_triples[i] for i in train_idx]
         seen_test = [seen_graph_triples[i] for i in test_idx]
         
-
-        # train, test = train_test_split(node_triples, test_size=test_size, random_state=seed)
-        print(len(seen_train), len(seen_test), len(unseen_graph_triples))
+        print("Train graph triples: ", len(seen_train), "Test graph triples: ", len(seen_test), "Unseen graph triples: ", len(unseen_graph_triples))
 
         data = {
             'train': seen_train,
             'test': seen_test,
             'unseen': unseen_graph_triples,
+        }
+        
+        i += 1
+        yield data
+
+
+def get_kfold_lp_data(data, seed=42, test_size=0.1):
+
+    seen_graphs = data['train_graphs']
+    unseen_graphs = data['test_graphs']
+
+    X_train = [1]*len(seen_graphs)
+
+    k_folds = int(1/test_size)
+    i = 0
+    skf = StratifiedKFold(n_splits=k_folds, shuffle=True, random_state=seed)
+
+    for train_idx, test_idx in skf.split(X_train, X_train):
+        seen_train = [seen_graphs[i] for i in train_idx]
+        seen_test = [seen_graphs[i] for i in test_idx]
+        
+
+        # train, test = train_test_split(node_triples, test_size=test_size, random_state=seed)
+        print("Train graphs: ", len(seen_train), "Test graphs: ", len(seen_test), "Unseen graphs: ", len(unseen_graphs))
+
+        data = {
+            'train': seen_train,
+            'test': seen_test,
+            'unseen': unseen_graphs,
         }
         
         i += 1

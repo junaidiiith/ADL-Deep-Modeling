@@ -3,7 +3,7 @@ import os
 from parameters import parse_args
 from graph_utils import get_graph_data
 from trainers import get_uml_gpt
-from data_generation_utils import get_kfold_data
+from data_generation_utils import get_kfold_lm_data
 from data_generation_utils import get_data_for_classification, get_classification_dataset
 from data_generation_utils import get_dataloaders
 from models import UMLGPTClassifier
@@ -37,6 +37,7 @@ def pretrained_lm_sequence_classification(data, args):
 
 if __name__ == '__main__':
     args = parse_args()
+    args.stage = 'cls'
     config = create_run_config(args)
 
     args.special_tokens = SPECIAL_TOKENS
@@ -47,7 +48,7 @@ if __name__ == '__main__':
 
     graph_data = get_graph_data(args.graphs_file)
     entity_map, super_types_map = graph_data['entities_encoder'], graph_data['super_types_encoder']
-    for i, data in enumerate(get_kfold_data(graph_data)):
+    for i, data in enumerate(get_kfold_lm_data(graph_data, seed=args.seed)):
         break
     
     compute_metrics_fn = get_recommendation_metrics_multi_label if args.multi_label else get_recommendation_metrics
@@ -55,5 +56,5 @@ if __name__ == '__main__':
 
     if args.trainer in ['PT', 'CT']:
         train_uml_gpt_classification(data, label_encoder, compute_metrics_fn, args)
-    else:
+    elif args.trainer == 'HFGPT':
         pretrained_lm_sequence_classification(data, args)

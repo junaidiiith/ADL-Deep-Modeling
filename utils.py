@@ -3,7 +3,7 @@ import os
 import random
 import numpy as np
 import re
-
+from sklearn.metrics import roc_auc_score
 import torch
 
 
@@ -122,6 +122,18 @@ def get_recommendation_metrics_multi_label(logits, labels):
     }
 
 
+def compute_loss(pos_score, neg_score):
+    scores = torch.cat([pos_score, neg_score])
+    labels = torch.cat([torch.ones(pos_score.shape[0]), torch.zeros(neg_score.shape[0])])
+    return torch.nn.BCEWithLogitsLoss()(scores.float(), labels.float())
+
+def compute_auc(pos_score, neg_score):
+    scores = torch.cat([pos_score, neg_score]).detach().numpy()
+    labels = torch.cat(
+        [torch.ones(pos_score.shape[0]), torch.zeros(neg_score.shape[0])]).detach().numpy()
+    return roc_auc_score(labels, scores)
+
+
 def get_eval_stats(eval_result):
     stats = {
         'loss': eval_result['eval_loss'], 
@@ -144,6 +156,21 @@ def set_seed(seed):
     torch.cuda.manual_seed(seed)
 
 
+def get_package_name(obj):
+    # For functions, classes, or methods
+    if hasattr(obj, '__module__'):
+        module_name = obj.__module__
+        if hasattr(obj, '__class__') and obj.__class__.__name__ == 'function':
+            # For functions
+            return module_name
+        else:
+            # For classes or methods
+            return f"{module_name}.{obj.__name__}"
+
+    # For other objects (e.g., modules)
+    return getattr(obj, '__name__', None)
+
+
 def create_run_config(args):
     set_seed(args.seed)
     config = {
@@ -160,9 +187,10 @@ def create_run_config(args):
         'multi_label': args.multi_label,
         'gpt_model': args.gpt_model,
         'tokenizer': args.model_name,
+        'stage': args.stage,
     }
 
-    file_name = f"{args.class_type}_{args.trainer}_{args.gpt_model}_{args.model_name}"
+    file_name = f"{args.class_type}_{args.trainer}_{args.gpt_model}_s_{args.stage}_tok={args.tokenizer if args.trainer != 'CT' else 'word'}"
     
     if args.multi_label:
         file_name += "_multi_label"

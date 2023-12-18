@@ -1,4 +1,5 @@
 import torch
+import torch_geometric
 from transformers import AutoModel
 import torch.nn as nn
 
@@ -18,102 +19,25 @@ def weights_init(model):
         nn.init.zeros_(model.bias.data)
 
 
-class TripleClassifier(torch.nn.Module):
-    """
-        Classifier that first uses the model to get the pooled output
-        Then applies a linear layer to get the logits for the entity classification
-        Then applies another linear layer to get the logits for the super_type classification
-    """
 
-    def __init__(self, num_labels, num_spt_labels, mask_token, mask_token_id, model_name='xlm-roberta-base'):
-        super(TripleClassifier, self).__init__()
-        self.model = AutoModel.from_pretrained(model_name)
-        self.num_labels = num_labels
-        self.num_spt_labels = num_spt_labels
-        self.dropout = torch.nn.Dropout(0.1)
-        self.entity_linear = torch.nn.Linear(self.model.config.hidden_size, self.num_labels)
-        self.spt_linear = torch.nn.Linear(self.model.config.hidden_size, self.num_spt_labels)
-        self.softmax = torch.nn.Softmax(dim=1)
-        self.mask_token_id = mask_token_id
-        self.mask_token = mask_token
-        
-    
-    def forward(self, batch):
-        entity_logits = self.get_entity_logits(batch['entity_input_ids'], batch['entity_attention_mask'])
-        spt_logits = self.get_super_type_logits(batch['super_type_input_ids'], batch['super_type_attention_mask'])
-        return entity_logits, spt_logits
-
-
-    def get_entity_logits(self, input_ids, attention_mask):
-
-        """
-            This method returns the logits by taking the logits of the [MASK] token and applying a linear layer
-            for the entity classification task
-        """
-            
-        input_ids = input_ids.to(device)
-        attention_mask = attention_mask.to(device)
-        outputs = self.model(input_ids=input_ids, attention_mask=attention_mask)
-        masked_token_embedding = outputs[0][:, 1, :]
-        masked_token_embedding = self.dropout(masked_token_embedding)
-        entity_logits = self.entity_linear(masked_token_embedding)
-        return entity_logits
-
-
-    def get_super_type_logits(self, input_ids, attention_mask):
-        """
-            This method returns the logits by applying a linear layer on the CLS token embedding
-            for the super_type classification task
-        """
-
-        input_ids = input_ids.to(device)
-        attention_mask = attention_mask.to(device)
-        outputs = self.model(input_ids=input_ids, attention_mask=attention_mask)
-        cls_token_embedding = outputs[0][:, 0, :]
-        cls_token_embedding = self.dropout(cls_token_embedding)
-        spt_logits = self.spt_linear(cls_token_embedding)
-        return self.softmax(spt_logits)
-
-
-    def get_entity_loss(self, logits, labels):
-        """
-            logits: (batch_size, num_labels)
-            labels: (batch_size)
-            This method calculates the loss for the entity classification using cross entropy loss
-        """
-        logits = logits.to(device)
-        labels = labels.to(device)
-
-        loss_fct = torch.nn.CrossEntropyLoss()
-        loss = loss_fct(logits, labels)
-        return loss
-
-    def get_super_type_loss(self, spt_logits, spt_labels):
-        """
-            spt_logits: (batch_size, num_spt_labels)
-            spt_labels: (batch_size, num_spt_labels)
-            This method calculates the loss for the super_type classification such that,
-            if spt_labels shape is (batch_size, num_spt_labels), then the loss is calculated using cross entropy loss
-            else if spt_labels shape is (batch_size, num_spt_labels, k), then the loss is calculated using binary cross entropy loss
-        """
-
-        spt_logits = spt_logits.to(device)
-        spt_labels = spt_labels.to(device)
-
-        if len(spt_labels.shape) == 1:
-            loss_fct = torch.nn.CrossEntropyLoss()
-            loss = loss_fct(spt_logits, spt_labels)
+def get_embedding(model, encodings, pooling=None):
+    with torch.no_grad():
+        if isinstance(model, UMLGPT) or isinstance(model, UMLGPTClassifier):
+            outputs = model.get_embedding(encodings['input_ids'], encodings['attention_mask'])
         else:
-            loss_fct = torch.nn.BCELoss()
-            loss = loss_fct(spt_logits.float(), spt_labels.float())
-        return loss
-    
+            outputs = model(**encodings)
 
-    def get_loss(self, logits, spt_logits, labels, spt_labels):
-        entity_loss = self.get_entity_loss(logits, labels)
-        spt_loss = self.get_super_type_loss(spt_logits, spt_labels)
-        return entity_loss, spt_loss
-    
+        if pooling is None:
+            return outputs[:, -1, :]
+        elif pooling == 'mean':
+            return outputs.mean(dim=1)
+        elif pooling == 'max':
+            return outputs.max(dim=1)[0]
+        elif pooling == 'cls':
+            return outputs[:, 0, :]
+        else:
+            raise ValueError(f'{pooling} pooling not supported for model')
+
 
 
 class Head(nn.Module):
@@ -307,6 +231,9 @@ class UMLGPTClassifier(nn.Module):
             loss_fct = torch.nn.BCEWithLogitsLoss()
             loss = loss_fct(logits.float(), labels.float())
         return loss
+    
+    def get_embedding(self, x, attention_mask):
+        return self.model.get_embedding(x, attention_mask)
 
     def get_model_size(self):
         return sum(p.numel() for p in self.parameters() if p.requires_grad)
@@ -318,3 +245,80 @@ class UMLGPTClassifier(nn.Module):
     def from_pretrained(state_dict, num_classes):
         model = UMLGPTClassifier(UMLGPT.from_pretrained(state_dict), num_classes)
         return model
+
+
+class GNNModel(torch.nn.Module):
+  """GraphSage Network"""
+  def __init__(self, model_name, input_dim, hidden_dim, out_dim, num_layers, num_heads=None, residual=False, l_norm=False, dropout=0.1):
+    super(GNNModel, self).__init__()
+    gnn_model = getattr(torch_geometric.nn, model_name)
+    self.conv_layers = nn.ModuleList()
+    if model_name == 'GINConv':
+        input_layer = gnn_model(nn.Sequential(nn.Linear(input_dim, hidden_dim), nn.ReLU()), train_eps=True)
+    elif num_heads is None:
+        input_layer = gnn_model(input_dim, hidden_dim, aggr='SumAggregation')
+    else:
+        input_layer = gnn_model(input_dim, hidden_dim, heads=num_heads, aggr='SumAggregation')
+    self.conv_layers.append(input_layer)
+
+    for _ in range(num_layers - 2):
+        if model_name == 'GINConv':
+            self.conv_layers.append(gnn_model(nn.Sequential(nn.Linear(hidden_dim, hidden_dim), nn.ReLU()), train_eps=True))
+        elif num_heads is None:
+            self.conv_layers.append(gnn_model(hidden_dim, hidden_dim, aggr='SumAggregation'))
+        else:
+            self.conv_layers.append(gnn_model(num_heads*hidden_dim, hidden_dim, heads=num_heads, aggr='SumAggregation'))
+
+    if model_name == 'GINConv':
+        self.conv_layers.append(gnn_model(nn.Sequential(nn.Linear(hidden_dim, out_dim), nn.ReLU()), train_eps=True))
+    else:
+        self.conv_layers.append(gnn_model(hidden_dim if num_heads is None else num_heads*hidden_dim, out_dim, aggr='SumAggregation'))
+        
+    self.activation = nn.ReLU()
+    self.layer_norm = nn.LayerNorm(hidden_dim if num_heads is None else num_heads*hidden_dim) if l_norm else None
+    self.residual = residual
+    self.dropout = nn.Dropout(dropout)
+
+
+  def forward(self, in_feat, edge_index):
+    h = in_feat
+    h = self.conv_layers[0](h, edge_index)
+    h = self.activation(h)
+    if self.layer_norm is not None:
+        h = self.layer_norm(h)
+    h = self.dropout(h)
+
+    for conv in self.conv_layers[1:-1]:
+        h = conv(h, edge_index) if not self.residual else conv(h, edge_index) + h
+        h = self.activation(h)
+        if self.layer_norm is not None:
+            h = self.layer_norm(h)
+        h = self.dropout(h)
+    
+    h = self.conv_layers[-1](h, edge_index)
+    return h
+  
+
+class MLPPredictor(nn.Module):
+    def __init__(self, h_feats, num_classes=1, num_layers=2):
+        super().__init__()
+        self.layers = nn.ModuleList()
+        in_feats = h_feats * 2
+        for _ in range(num_layers - 1):
+            self.layers.append(nn.Linear(in_feats, h_feats))
+            self.layers.append(nn.ReLU())
+            in_feats = h_feats
+        
+        self.layers.append(nn.Linear(h_feats, num_classes))
+
+    def apply_edges(self, edges):
+        h = torch.cat([edges.src['h'], edges.dst['h']], 1)
+        for layer in self.layers:
+            h = layer(h)
+        return {'score': h.squeeze(1)}
+
+    def forward(self, g, h):
+        with g.local_scope():
+            g.ndata['h'] = h
+            g.apply_edges(self.apply_edges)
+            return g.edata['score']

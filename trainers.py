@@ -1,7 +1,7 @@
+from turtle import pos
 from torch.utils.tensorboard import SummaryWriter
 from transformers import DataCollatorForLanguageModeling
-from utils import get_recommendation_metrics, get_recommendation_metrics_multi_label
-from utils import compute_metrics
+from utils import compute_metrics, compute_loss, compute_auc
 import torch
 from tqdm.auto import tqdm
 import os
@@ -17,6 +17,8 @@ from data_generation_utils import get_dataloaders
 from data_generation_utils import get_pretrained_lm_tokenizer, get_word_tokenizer_tokenizer
 from data_generation_utils import get_generative_uml_dataset
 import transformers
+import numpy as np
+import itertools
 
 
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
@@ -25,193 +27,6 @@ def suppress_neptune(trainer):
     for cb in trainer.callback_handler.callbacks:
         if isinstance(cb, NeptuneCallback):
             trainer.callback_handler.remove_callback(cb)
-
-
-class LMTrainer:
-    def __init__(self, 
-            model, 
-            train_dataloader, 
-            test_dataloader, 
-            num_epochs=10, 
-            alpha=0.5,
-            save_dir='models',
-            multi_label=False,
-        ):
-        self.model = model
-        self.model.to(device)
-
-        self.train_dataloader = train_dataloader
-        self.test_dataloader = test_dataloader
-        self.num_epochs = num_epochs
-        self.alpha = alpha
-        self.multi_label = multi_label
-        self.entity_metric_func = get_recommendation_metrics
-        self.spt_metric_func = get_recommendation_metrics_multi_label if multi_label else get_recommendation_metrics
-        self.optimizer = torch.optim.Adam(model.parameters(), lr=1e-5)
-        self.scheduler = torch.optim.lr_scheduler.StepLR(self.optimizer, step_size=1, gamma=0.9)
-        self.writer = SummaryWriter(log_dir='logs')
-        self.metrics = ['MRR', 'Hits@1', 'Hits@3', 'Hits@5', 'Hits@10']
-        self.save_dir = save_dir
-    
-    
-    def test(self, epoch, dataloader=None):
-        if dataloader is None:
-            dataloader = self.test_dataloader
-
-        self.model.eval()
-        with torch.no_grad():
-            test_epoch_loss = 0
-            test_results_ep = {k: 0 for k in self.metrics}
-            test_results_sp = {k: 0 for k in self.metrics}
-            for batch in tqdm(self.test_dataloader, desc="Batches"):
-                
-                if not batch['entity_mask'].sum() or not batch['super_type_mask'].sum():
-                    continue
-
-                loss, entity_logits, entity_labels, spt_logits, super_type_labels = self.step(batch)
-
-                assert len(entity_labels) == len(entity_logits)
-                assert len(super_type_labels) == len(spt_logits)
-
-
-                test_epoch_loss += loss.item()
-
-                test_ep_metrics, test_sp_metrics = self.get_metrics(
-                    entity_logits, spt_logits, entity_labels, super_type_labels)
-                
-                for metric in test_results_ep:
-                    test_results_ep[metric] += test_ep_metrics[metric]
-                
-                for metric in test_results_sp:
-                    test_results_sp[metric] += test_sp_metrics[metric]
-
-                # break
-            
-            avg_test_epoch_loss = test_epoch_loss / len(self.test_dataloader)
-            print(f"Test Epoch {epoch} Loss: {avg_test_epoch_loss}")
-            self.writer.add_scalar("Test Loss", avg_test_epoch_loss, epoch)
-
-
-            for metric in test_results_ep:
-                test_results_ep[metric] /= len(self.test_dataloader)
-                self.writer.add_scalar(f"Test {metric}", test_results_ep[metric], epoch)
-
-            for metric in test_results_sp:
-                test_results_sp[metric] /= len(self.test_dataloader)
-                self.writer.add_scalar(f"Test {metric}", test_results_sp[metric], epoch)
-            
-
-            print("-"*100)
-            print("Metrics on Test set")
-            print("Entity Prediction", test_results_ep)
-            print("Super Type Prediction", test_results_sp)
-            print("-"*100)
-            print()
-
-            
-
-    def train(self):
-        self.model.train()
-        min_epoch_loss = float('inf')
-        best_metrics_ep = {k: 0 for k in self.metrics}
-        best_metrics_sp = {k: 0 for k in self.metrics}
-        for epoch in tqdm(range(self.num_epochs), desc="Epochs"):
-            epoch_loss = 0
-            epoch_results_ep = {k: 0 for k in self.metrics}
-            epoch_results_sp = {k: 0 for k in self.metrics}
-            
-            for batch in tqdm(self.train_dataloader, desc="Batches"):
-                # print(batch['input_ids'].shape, batch['attention_mask'].shape, entity_labels.shape, super_type_labels.shape)
-                
-                if not batch['entity_mask'].sum() or not batch['super_type_mask'].sum():
-                    continue
-                    
-                self.optimizer.zero_grad()
-                loss, entity_logits, entity_labels, spt_logits, super_type_labels = self.step(batch)
-
-                assert len(entity_labels) == len(entity_logits)
-                assert len(super_type_labels) == len(spt_logits)
-
-                loss.backward()
-                self.optimizer.step()
-                self.scheduler.step()
-
-                epoch_loss += loss.item()
-
-                train_ep_metrics, train_sp_metrics = self.get_metrics(
-                    entity_logits, spt_logits, entity_labels, super_type_labels)
-
-                for metric in epoch_results_ep:
-                    epoch_results_ep[metric] += train_ep_metrics[metric]
-                
-                for metric in epoch_results_sp:
-                    epoch_results_sp[metric] += train_sp_metrics[metric]
-                
-                # break
-                
-            
-            avg_epoch_loss = epoch_loss / len(self.train_dataloader)
-            print(f"Epoch {epoch} Loss: {avg_epoch_loss}")
-            self.writer.add_scalar("Train Loss", avg_epoch_loss, epoch)
-
-
-            for metric in epoch_results_ep:
-                epoch_results_ep[metric] /= len(self.train_dataloader)
-                self.writer.add_scalar(f"Train {metric}", epoch_results_ep[metric], epoch)
-
-            for metric in epoch_results_sp:
-                epoch_results_sp[metric] /= len(self.train_dataloader)
-                self.writer.add_scalar(f"Train {metric}", epoch_results_sp[metric], epoch)
-
-            if avg_epoch_loss < min_epoch_loss:
-                min_epoch_loss = avg_epoch_loss
-                torch.save(self.model.state_dict(), self.save_dir + f'/XML4UML_ckpt_{epoch}.pt')
-
-            print("-"*100)
-            print("Metrics on train set")
-            print("Entity Prediction", epoch_results_ep)
-            print("Super Type Prediction", epoch_results_sp)
-            print("-"*100)
-            print()
-
-            for metric in epoch_results_ep:
-                if epoch_results_ep[metric] > best_metrics_ep[metric]:
-                    best_metrics_ep[metric] = epoch_results_ep[metric]
-            
-            for metric in epoch_results_sp:
-                if epoch_results_sp[metric] > best_metrics_sp[metric]:
-                    best_metrics_sp[metric] = epoch_results_sp[metric]
-
-
-            if epoch % 2 == 0:
-                print("-"*100)
-                self.test(epoch)
-                print("-"*100)
-                
-            
-            # break
-    def step(self, batch):
-        
-        entity_mask = batch['entity_mask']
-        spt_mask = batch['super_type_mask']
-
-        super_type_labels = batch['super_type_label']
-        entity_labels = batch['entity_label']
-
-        entity_logits, spt_logits = self.model(batch)
-
-        entity_loss = self.model.get_entity_loss(entity_logits[entity_mask], entity_labels[entity_mask])
-        spt_loss = self.model.get_super_type_loss(spt_logits[spt_mask], super_type_labels[spt_mask])
-        
-        loss = self.alpha * entity_loss + (1 - self.alpha) * spt_loss
-
-        return loss, entity_logits[entity_mask], entity_labels[entity_mask], spt_logits[spt_mask], super_type_labels[spt_mask]
-    
-
-    def get_metrics(self, entity_logits, spt_logits, entity_labels, super_type_labels):
-        entity_metrics = self.entity_metric_func(entity_logits, entity_labels)
-        super_type_metrics = self.spt_metric_func(spt_logits, super_type_labels)
-        return entity_metrics, super_type_metrics
 
 
 class UMLGPTTrainer:
@@ -335,6 +150,108 @@ class UMLGPTTrainer:
         print(f"{split_type}: {metrics}")
 
 
+class GNNLinkPredictionTrainer:
+    def __init__(self, model, predictor, args) -> None:
+        self.model = model
+        self.predictor = predictor
+        self.model.to(device)
+        self.optimizer = torch.optim.Adam(itertools.chain(model.parameters(), predictor.parameters()), lr=args.lr)
+
+        
+        self.edge2index = lambda g: torch.stack(list(g.edges())).contiguous()
+        self.args = args
+        print("GNN Trainer initialized.")
+
+    def train(self, dataloader):
+        self.model.train()
+        self.predictor.train()
+
+        epoch_loss, epoch_acc = 0, 0
+        for batch in dataloader:
+            self.optimizer.zero_grad()
+            self.model.zero_grad()
+            self.predictor.zero_grad()
+            
+            h = self.get_logits(batch['train_g'])
+
+            pos_score = self.predictor(batch['train_pos_g'], h)
+            neg_score = self.predictor(batch['train_neg_g'], h)
+            loss = compute_loss(pos_score, neg_score)
+
+            loss.backward()
+            self.optimizer.step()
+
+            epoch_loss += loss.item()
+            epoch_acc += compute_auc(pos_score, neg_score)
+
+        epoch_loss /= len(dataloader)
+        epoch_acc /= len(dataloader)
+        print(f"Epoch Train Loss: {epoch_loss} and Train Accuracy: {epoch_acc}")
+        return epoch_loss, epoch_acc
+    
+
+    def test(self, dataloader):
+        self.model.eval()
+        self.predictor.eval()
+        with torch.no_grad():
+            epoch_loss, epoch_acc = 0, 0
+            for batch in dataloader:            
+                h = self.get_logits(batch['train_g'])
+
+                pos_score = self.predictor(batch['test_pos_g'], h)
+                neg_score = self.predictor(batch['test_neg_g'], h)
+                loss = compute_loss(pos_score, neg_score)
+
+                epoch_loss += loss.item()
+                epoch_acc += compute_auc(pos_score, neg_score)
+
+            epoch_loss /= len(dataloader)
+            epoch_acc /= len(dataloader)
+            print(f"Epoch Test Loss: {epoch_loss} and Test Accuracy: {epoch_acc}")
+            return epoch_loss, epoch_acc
+
+
+    def get_logits(self, g):
+        edge_index = self.edge2index(g).to(device)
+        x = g.ndata['h'].float()
+        h = self.model(x, edge_index)
+        return h
+
+
+    def get_prediction(self, h, g):
+        edge_index = self.edge2index(g).to(device)
+        out = self.predictor(h, edge_index)
+        return out
+
+
+    def run_epochs(self, dataloader, num_epochs):
+        max_val_acc, max_train_acc = 0, 0
+        outputs = list()
+        for epoch in tqdm(range(num_epochs), desc="Epochs"):
+        # for epoch in range(num_epochs):
+            train_loss, train_acc = self.train(dataloader)
+            
+            if epoch % 10 == 0:
+                print(f"Epoch {epoch} Train Loss: {train_loss}")
+            
+            test_loss, test_acc = self.test(dataloader)
+
+            if test_acc > max_val_acc:
+                max_val_acc = test_acc
+                max_train_acc = train_acc
+                outputs.append({
+                    'epoch': epoch,
+                    'train_loss': train_loss,
+                    'test_loss': test_loss,
+                    'test_acc': test_acc
+                })
+        
+        print(f"Max Test Accuracy: {max_val_acc}")
+        print(f"Max Train Accuracy: {max_train_acc}")
+        max_output = max(outputs, key=lambda x: x['test_acc'])
+        return max_output
+
+
 
 def get_uml_gpt(input_dim, args):
     embed_dim = args.embed_dim
@@ -417,7 +334,8 @@ def train_hugging_face_gpt(data, args):
 def get_tokenizer(data, args):
     if args.trainer in ['HFGPT', 'PT']:
         print("Creating pretrained LM tokenizer...")
-        tokenizer = get_pretrained_lm_tokenizer(args.model_name, special_tokens=args.special_tokens)
+
+        tokenizer = get_pretrained_lm_tokenizer(args.tokenizer, special_tokens=args.special_tokens)
         print("Done!")
     else:
         print("Creating word tokenizer...")

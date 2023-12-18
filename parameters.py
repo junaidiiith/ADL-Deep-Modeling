@@ -14,6 +14,7 @@ def parse_args():
     parser.add_argument("--log_dir", type=str, default="logs")
     parser.add_argument("--graphs_file", type=str, default="combined_graphs_clean.pkl")
     parser.add_argument("--model_name", type=str, default="gpt2")
+    parser.add_argument("--tokenizer", type=str, default="bert-base-cased")
 
     parser.add_argument("--seed", type=int, default=42)
     
