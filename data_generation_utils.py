@@ -1,3 +1,6 @@
+import os
+from dgl.data import DGLDataset
+import dgl
 from sklearn.model_selection import StratifiedKFold
 from torch.utils.data import Dataset, DataLoader
 from transformers import AutoTokenizer
@@ -6,6 +9,7 @@ from nltk.tokenize import word_tokenize
 import torch
 import numpy as np
 from utils import clean_text
+from models import get_embedding
 
 
 SSP = "<superType>"
@@ -28,6 +32,7 @@ SPECIAL_TOKENS = [PAD, UNK, SOS, EOS, MASK, SEP, SSP, ESP, SEN, EEN, SRP, ERP]
 
 
 promptize_triple = lambda x: f"{SOS} {SSP} {clean_text(x[2])} {ESP} {SEN} {clean_text(x[0])} {EEN} {SRP} {clean_text(x[1])} {ERP} {EOS}"
+promptize_node = lambda g, n: promptize_triple((n, g.nodes[n]['references'] if 'references' in g.nodes[n] else '', g.nodes[n]['super_types'] if 'super_types' in g.nodes[n] else ''))
 
 def promptize_super_type_generation(x):
     return f"{SOS} {SEN} {clean_text(x[0])} {EEN} {SRP} {clean_text(x[1])} {ERP} {SEP} {SSP} {clean_text(x[2])} {ESP} {EOS}"
@@ -205,6 +210,44 @@ def get_gpt2_dataset(data, tokenizer):
         split_type: GPT2Dataset(tokenized_data[split_type]) for split_type in data
     }
     return dataset
+
+
+def get_pos_neg_graphs(nxg, tr=0.2):
+    g = dgl.from_networkx(nxg, edge_attrs=['masked'])
+    u, v = g.edges()
+    test_mask = torch.where(g.edata['masked'])[0]
+    train_mask = torch.where(~g.edata['masked'])[0]
+    test_size = int(g.number_of_edges() * tr)
+    test_pos_u, test_pos_v = u[test_mask], v[test_mask]
+    train_pos_u, train_pos_v = u[train_mask], v[train_mask]
+
+    # Find all negative edges and split them for training and testing
+    adj = g.adjacency_matrix()
+    adj_neg = 1 - adj.to_dense() - np.eye(g.number_of_nodes())
+    neg_u, neg_v = np.where(adj_neg != 0)
+
+    neg_eids = np.random.choice(len(neg_u), g.number_of_edges())
+    test_neg_u, test_neg_v = neg_u[neg_eids[:test_size]], neg_v[neg_eids[:test_size]]
+    train_neg_u, train_neg_v = neg_u[neg_eids[test_size:]], neg_v[neg_eids[test_size:]]
+
+    train_g = dgl.remove_edges(g, test_mask)
+
+    train_pos_g = dgl.graph((train_pos_u, train_pos_v), num_nodes=g.number_of_nodes())
+    train_neg_g = dgl.graph((train_neg_u, train_neg_v), num_nodes=g.number_of_nodes())
+
+    test_pos_g = dgl.graph((test_pos_u, test_pos_v), num_nodes=g.number_of_nodes())
+    test_neg_g = dgl.graph((test_neg_u, test_neg_v), num_nodes=g.number_of_nodes())
+    
+    graphs = {
+        'train_pos_g': train_pos_g,
+        'train_neg_g': train_neg_g,
+        'test_pos_g': test_pos_g,
+        'test_neg_g': test_neg_g,
+        'train_g': train_g
+    }
+    return graphs
+
+
 
 
 def get_kfold_lm_data(data, seed=42, test_size=0.1):
@@ -446,3 +489,73 @@ class GPT2Dataset(Dataset):
     def __getitem__(self, index):
         item = {key: val[index] for key, val in self.tokenized.items()}
         return item
+    
+
+class LinkPredictionDataset(DGLDataset):
+    def __init__(self, graphs, tokenizer, model, test_size=0.2, raw_dir='datasets/LP', save_dir='datasets/LP'):
+        self.raw_graphs = graphs
+        self.tokenizer = tokenizer
+        self.model = model
+        self.test_size = test_size
+        
+        super().__init__(name='link_prediction', raw_dir=raw_dir, save_dir=save_dir)
+        """
+        Load dataset of graphs if exists, otherwise create it.
+        """
+        
+        
+    def __getitem__(self, idx):
+        return self.graphs[idx]
+    
+    def __len__(self):
+        return len(self.graphs)
+    
+    def process(self):
+        self.graphs = self._prepare()
+
+    def _prepare(self):
+        prepared_graphs = [self._prepare_graph(g) for g in tqdm(self.raw_graphs, desc='Preparing graphs')]
+        return prepared_graphs
+    
+    def _prepare_graph(self, g):
+
+        node_strs = [promptize_node(g, n) for n in g.nodes()]
+        max_token_length = get_encoding_size(node_strs, self.tokenizer)
+        node_encodings = self.tokenizer(node_strs, padding=True, truncation=True, max_length=max_token_length, return_tensors='pt')
+        node_embeddings = get_embedding(self.model, node_encodings)
+        pos_neg_graphs = get_pos_neg_graphs(g, self.test_size)        
+        
+        dgl_graph = pos_neg_graphs['train_g']
+        dgl_graph.ndata['h'] = node_embeddings
+
+        return pos_neg_graphs
+
+    
+    def save(self):
+        """Save list of DGLGraphs using DGL save_graphs."""
+        print("Saving graphs to cache...")
+        keys = ['train_pos_g', 'train_neg_g', 'test_pos_g', 'test_neg_g', 'train_g']
+        graphs = {k: [g[k] for g in self.graphs] for k in keys}
+        for k, v in graphs.items():
+            dgl.save_graphs(os.path.join(self.save_dir, f'{self.name}_{k}.dgl'), v)
+    
+    
+    def load(self):
+        """Load list of DGLGraphs using DGL load_graphs."""
+        print("Loading graphs from cache...")
+        
+        keys = ['train_pos_g', 'train_neg_g', 'test_pos_g', 'test_neg_g', 'train_g']
+        k_graphs = {k: [] for k in keys}
+        for k in keys:
+            k_graphs[k] = dgl.load_graphs(os.path.join(self.save_dir, f'{self.name}_{k}.dgl'))[0]
+        
+        self.graphs = list()
+        for i in range(len(k_graphs['train_g'])):
+            self.graphs.append({k: v[i] for k, v in k_graphs.items()})
+        
+        print(f'Loaded {len(self.graphs)} graphs.')
+
+        
+    def has_cache(self):
+        return os.path.exists(os.path.join(self.save_dir, f'{self.name}_train_g.dgl'))
+    

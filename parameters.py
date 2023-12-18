@@ -23,6 +23,7 @@ def parse_args():
     parser.add_argument("--models_dir", type=str, default="models")
     
 
+    parser.add_argument("--stage", type=str, choices=['pre', 'cls', 'lp'], default='pre')
     parser.add_argument("--trainer", type=str, choices=['PT', 'CT', 'HFGPT'], default='HFGPT')
     parser.add_argument("--class_type", type=str, choices=['super', 'entity'], default='super')
 

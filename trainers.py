@@ -17,8 +17,8 @@ from data_generation_utils import get_dataloaders
 from data_generation_utils import get_pretrained_lm_tokenizer, get_word_tokenizer_tokenizer
 from data_generation_utils import get_generative_uml_dataset
 import transformers
-import numpy as np
 import itertools
+from data_generation_utils import SPECIAL_TOKENS
 
 
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
@@ -331,22 +331,22 @@ def train_hugging_face_gpt(data, args):
     print('Done!')
 
 
-def get_tokenizer(data, args):
-    if args.trainer in ['HFGPT', 'PT']:
+def get_tokenizer(tokenizer_name, data=None):
+    
+    if data is None:
         print("Creating pretrained LM tokenizer...")
-
-        tokenizer = get_pretrained_lm_tokenizer(args.tokenizer, special_tokens=args.special_tokens)
+        tokenizer = get_pretrained_lm_tokenizer(tokenizer_name)
         print("Done!")
     else:
         print("Creating word tokenizer...")
-        tokenizer = get_word_tokenizer_tokenizer(data, special_tokens=args.special_tokens)
+        tokenizer = get_word_tokenizer_tokenizer(data)
         print("Done!")
     
     return tokenizer
 
 
 def train_umlgpt(dataset, args):
-    tokenizer = get_tokenizer(dataset, args)
+    tokenizer = get_tokenizer(args.tokenizer, dataset)
         
     print("Tokenize dataset...")
     tokenized_dataset = get_generative_uml_dataset(dataset, tokenizer)

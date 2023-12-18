@@ -12,12 +12,11 @@ from utils import get_recommendation_metrics, get_recommendation_metrics_multi_l
 from trainers import get_tokenizer
 from trainers import train_hf_for_classification
 
-from data_generation_utils import SPECIAL_TOKENS
 from utils import create_run_config
 
 
 def train_uml_gpt_classification(data, label_encoder, compute_metrics_fn, args):
-    tokenizer = get_tokenizer(data, args)
+    tokenizer = get_tokenizer(args.tokenizer, data)
     data = get_data_for_classification(data, class_type=args.class_type)
     dataset = get_classification_dataset(data, tokenizer, label_encoder, class_type=args.class_type, multi_label=args.multi_label)
     model = get_uml_gpt(len(tokenizer), args)
@@ -28,7 +27,7 @@ def train_uml_gpt_classification(data, label_encoder, compute_metrics_fn, args):
 
 def pretrained_lm_sequence_classification(data, args):
     assert not args.multi_label, "Multi-label classification is not supported for pretrained models"
-    tokenizer = get_tokenizer(data, args)
+    tokenizer = get_tokenizer(args.tokenizer)
     data = get_data_for_classification(data, class_type=args.class_type)
     dataset = get_classification_dataset(data, tokenizer, label_encoder, class_type=args.class_type)
     train_hf_for_classification(dataset, tokenizer, args)
@@ -39,8 +38,6 @@ if __name__ == '__main__':
     args = parse_args()
     args.stage = 'cls'
     config = create_run_config(args)
-
-    args.special_tokens = SPECIAL_TOKENS
     
     data_dir = args.data_dir
     args.graphs_file = os.path.join(data_dir, args.graphs_file)

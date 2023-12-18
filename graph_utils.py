@@ -98,9 +98,9 @@ def get_graph_data(graphs_file, seed=42):
     graph_file_name = os.path.basename(graphs_file).split('.')[0]
 
     node_triples_file = os.path.join(os.path.dirname(graphs_file), f'{graph_file_name}_node_triples.pkl')
-    # if os.path.exists(node_triples_file):
-    #     data = pickle.load(open(node_triples_file, 'rb'))
-    #     return data
+    if os.path.exists(node_triples_file):
+        data = pickle.load(open(node_triples_file, 'rb'))
+        return data
 
     graphs = pickle.load(open(graphs_file, 'rb'))
 
@@ -158,11 +158,11 @@ def get_graph_data(graphs_file, seed=42):
 
 
 
-if __name__ == "__main__":
-    random.seed(42)
+# if __name__ == "__main__":
+#     random.seed(42)
 
 
-    data = get_graph_data('datasets/ecore_graph_pickles/combined_graphs_clean.pkl')
+#     data = get_graph_data('datasets/ecore_graph_pickles/combined_graphs_clean.pkl')
 
     # print("Training triples:", len(data['train_triples']))
     # print("Test triples:", len(data['test_triples']))
