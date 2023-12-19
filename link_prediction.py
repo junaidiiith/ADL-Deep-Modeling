@@ -49,8 +49,6 @@ def train_link_prediction(graphs, args):
 
     for split_type in graphs:
         print(f"Training Link Prediction {split_type} graphs")
-        if split_type == 'train':
-            continue
         
         dataset = LinkPredictionDataset(
             graphs=graphs[split_type], 
