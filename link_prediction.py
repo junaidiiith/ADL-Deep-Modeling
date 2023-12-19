@@ -41,7 +41,7 @@ def train_link_prediction(graphs, args):
     )
 
     predictor = MLPPredictor(
-        h_feats=256,
+        h_feats=args.embed_dim,
         num_layers=2,
     )
 
