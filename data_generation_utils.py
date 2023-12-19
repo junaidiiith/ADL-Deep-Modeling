@@ -456,7 +456,7 @@ def get_embedding(model, encodings, pooling='last'):
                 outputs = model.get_embedding(batch['input_ids'].to(device), batch['attention_mask'].to(device))
             else:
                 encodings = {k: v.to(device) for k, v in batch.items()}
-                outputs = model(**batch)
+                outputs = model(**encodings)[0]
 
             outputs = outputs.cpu().detach()
             if pooling == 'last':
@@ -700,7 +700,8 @@ class LinkPredictionDataset(DGLDataset):
         save_dir: directory to save the processed data
 
     """
-    def __init__(self, graphs, tokenizer, model, split_type='train', test_size=0.2, raw_dir='datasets/LP', save_dir='datasets/LP'):
+    def __init__(self, graphs, tokenizer, \
+                 model, split_type='train', test_size=0.2, raw_dir='datasets/LP', save_dir='datasets/LP'):
         self.raw_graphs = graphs
         self.tokenizer = tokenizer
         self.model = model
@@ -757,6 +758,7 @@ class LinkPredictionDataset(DGLDataset):
         """Save list of DGLGraphs using DGL save_graphs."""
         print("Saving graphs to cache...")
         keys = ['train_pos_g', 'train_neg_g', 'test_pos_g', 'test_neg_g', 'train_g']
+        
         graphs = {k: [g[k] for g in self.graphs] for k in keys}
         for k, v in graphs.items():
             dgl.save_graphs(os.path.join(self.save_dir, f'{self.name}_{k}_{self.split_type}.dgl'), v)

@@ -121,36 +121,14 @@ All Run Configurations for UML Entity and Supertype classification task
 2. Pretraining with word tokenizer and UMLGPT
 3. Pretraining with PLM
 
+Super Type and Entity Classification
 4. Classification directly with PLM Tokenizer and UMLGPT
-   4. Entity Classification
-   5. Super type Classification - single label
-   6. Super type Classification - multi label
+5. Classification directly with word Tokenizer and UMLGPT
+6. Classification directly with PLM
 
-7. Classification directly with word Tokenizer and UMLGPT
-   7. Entity Classification
-   8. Super type Classification - single label
-   9. Super type Classification - multi label
+7. Classification with pretrained UMLGPT and PLM Tokenizer
+8. Classification with pretrained UMLGPT with word Tokenizer
+9. Classification with pretrained PLM and PLM Tokenizer
 
-10. Classification directly with PLM
-   10. Entity Classification
-   11. Super type Classification - single label
-
-
-12. Classification with pretrained UMLGPT and PLM Tokenizer
-   12. Entity Classification
-   13. Super type Classification - single label
-   14. Super type Classification - multi label
-
-
-15. Classification with pretrained UMLGPT and PLM Tokenizer
-   15. Entity Classification
-   16. Super type Classification - single label
-   17. Super type Classification - multi label
-
-
-18. Classification with pretrained PLM and PLM Tokenizer
-   18. Entity Classification
-   19. Super type Classification - single label
-
-   
-
+Link Prediction
+Using node embeddings from pretrained UMLGPT/LM and GNN-based Link Prediction

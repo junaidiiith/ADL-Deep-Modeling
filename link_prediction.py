@@ -1,5 +1,4 @@
 import os
-from tqdm.auto import tqdm
 from parameters import parse_args
 from graph_utils import get_graph_data
 from data_generation_utils import get_kfold_lp_data
@@ -71,8 +70,7 @@ def train_link_prediction(graphs, args):
     """
     language_model = import_model(args)
     tokenizer = get_tokenizer(args.tokenizer)
-    input_dim = language_model.token_embedding_table.weight.data.shape[1]
-
+    input_dim = language_model.token_embedding_table.weight.data.shape[1] if args.gpt_model == 'uml-gpt' else language_model.config.hidden_size
     gnn_model = GNNModel(
         model_name='SAGEConv', 
         input_dim=input_dim, 

@@ -318,7 +318,7 @@ class GNNLinkPredictionTrainer:
         # print(f"Results written to {os.path.join(self.results_dir, 'results.txt')}")
 
 
-def get_uml_gpt(input_dim, args):
+def get_uml_gpt(vocab_size, args):
     """
         Get the UMLGPT model
         Args:
@@ -332,7 +332,7 @@ def get_uml_gpt(input_dim, args):
     n_head = args.num_heads
     block_size = args.block_size
 
-    uml_gpt = UMLGPT(input_dim, embed_dim, block_size, n_layer, n_head)
+    uml_gpt = UMLGPT(vocab_size, embed_dim, block_size, n_layer, n_head)
     if args.from_pretrained is not None:
         uml_gpt = UMLGPT.from_pretrained(args.from_pretrained)
         print(f'Loaded pretrained model from {args.from_pretrained}')
