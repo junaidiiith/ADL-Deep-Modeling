@@ -50,18 +50,46 @@ For the first two tasks (sequence classification), the chosen metrics are:
 
 For the third Link Prediction task, the metric chosen is `roc_auc_score`.
 
-Folder structure - 
+### File Descriptions
 
-data_generation_utils.py - this file contains all the methods and classes that are required to create pytorch datasets, extract data from UML models and convert them into strings. 
+#### [data_generation_utils.py](data_generation_utils.py)
+This file encapsulates essential methods and classes for creating PyTorch datasets, extracting data from UML models, and converting them into strings.
 
-model2nx.py - this file process the .ecore files of the UML models dataset and stores them into .pkl format
+#### [model2nx.py](model2nx.py)
+This script processes the .ecore files of UML models dataset, converting and storing them in .pkl format.
 
-models.py - this file contains all the implemented pytorch nn.Module classes - like UMLGPT, UMLGPTClassifier, MLPPredictor, GNNModel. Moreover, this file also contains nn.Module requires to create the transformer blocks
+#### [models.py](models.py)
+This file encompasses all implemented PyTorch `nn.Module` classes, such as UMLGPT, UMLGPTClassifier, MLPPredictor, and GNNModel. Additionally, it includes `nn.Module` classes required to create transformer blocks.
 
-ontouml_data_utils.py - this file contains all the methods and classes that are requires to extract data from the JSON files of OntoUML models present in the ``datasets`` folder. 
+#### [ontouml_data_utils.py](ontouml_data_utils.py)
+This module houses all necessary methods and classes for extracting data from JSON files of OntoUML models within the `datasets` folder.
 
+#### [parameters.py](parameters.py)
+All command-line argument parameters are contained and explained in this file. [Link to parameters.py](parameters.py)
 
+#### [pretraining.py](pretraining.py)
+This script executes the pretraining phase on UML models data.
 
+#### [uml_classification.py](uml_classification.py)
+This script performs sequence classification on UML models, predicting the UML class name or the UML abstract class of a UML class. It supports specifying a pretrained tokenizer or a custom vocab tokenizer. The model for classification can be an untrained UMLGPT, a pretrained UMLGPT model, or any model from the Hugging Face library. [Link to uml_classification.py](uml_classification.py)
+
+#### [utils.py](utils.py)
+This file contains methods to calculate metrics on the predictions.
+
+#### [ontouml_classification.py](ontouml_classification.py)
+This script executes sequence classification on UML models to predict the OntoUML stereotype of a UML class or relation. The tokenizer is always from a pretrained language model, and a custom tokenizer is not yet implemented for this case. The model for classification can be an untrained UMLGPT, a pretrained UMLGPT model, or any model from the Hugging Face library. [Link to ontouml_classification.py](ontouml_classification.py)
+
+#### [link_prediction.py](link_prediction.py)
+This script is used to execute link prediction between graphs on UML models. The tokenizer is always from a pretrained language model, and a custom tokenizer is not yet implemented for this case. [Link to link_prediction.py](link_prediction.py)
+
+#### [graph_utils.py](graph_utils.py)
+This file is used to create node triples, i.e., UML class, relation, and abstract class triples for UML models.
+
+#### [ontouml_data_utils.py](ontouml_data_utils.py)
+This script is used to create node triples for OntoUML classes. In this case, the node triple contains information not only about the neighbors but up to a distance `d`, as specified by the argument `distance`.
+
+#### [trainer.py](trainer.py)
+This file specifies all the trainers for the three different tasks.
 
 ## Run Configurations
 
