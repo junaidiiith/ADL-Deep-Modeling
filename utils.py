@@ -1,3 +1,4 @@
+import json
 import math
 import os
 import random
@@ -177,28 +178,47 @@ def create_run_config(args):
         'num_layers': args.num_layers,
         'num_heads': args.num_heads,
         'block_size': args.block_size,
-        'trainer': args.trainer,
         'class_type': args.class_type,
-        'multi_label': args.multi_label,
         'gpt_model': args.gpt_model,
-        'tokenizer': args.model_name,
-        'stage': args.stage,
+        'tokenizer': args.tokenizer,
+        'pooling': args.pooling,
+        'classification_model': args.classification_model,
+        'from_pretrained': args.from_pretrained,
     }
+    
+    file_name = f"{args.stage}_"
+    if args.stage == 'pre':
+        if args.gpt_model in ['uml-gpt']:
+            file_name += f"{args.gpt_model}_tok={args.tokenizer}"
+        else:
+            file_name += f"{args.gpt_model}"
 
-    file_name = f"{args.class_type}_{args.trainer}_{args.gpt_model}_s_{args.stage}_tok={args.tokenizer if args.trainer != 'CT' else 'word'}"
+    elif args.stage == 'cls':
+        if args.classification_model in ['uml-gpt']:
+            file_name += f"{args.classification_model}_tok={args.tokenizer}"
+        else:
+            file_name += f"{args.classification_model}_tok={args.tokenizer}"
+        file_name += f"_{args.class_type}"
+        file_name += f"_{args.pooling}"
+        file_name += f"_fp={args.from_pretrained if args.from_pretrained else '0'}"
+
+    elif args.stage == 'lp':
+        assert args.from_pretrained, "Pretrained model path is required for link prediction to get node embeddings"
+        file_name += f"{args.gpt_model}_tok={args.tokenizer}"
+
+
     
-    if args.multi_label:
-        file_name += "_multi_label"
-    
-    os.makedirs(os.path.join(args.log_dir, 'runs', file_name), exist_ok=True)
-    args.log_dir = os.path.join(args.log_dir, 'runs', file_name)
+    os.makedirs(os.path.join(args.log_dir, file_name), exist_ok=True)
+    args.log_dir = os.path.join(args.log_dir, file_name)
     
     os.makedirs(os.path.join('results', file_name), exist_ok=True)
     args.results_dir = os.path.join('results', file_name)
     
-    os.makedirs(os.path.join(args.models_dir, file_name), exist_ok=True)
-    args.models_dir = os.path.join(args.models_dir, file_name)
+    os.makedirs(os.path.join('models', file_name), exist_ok=True)
+    args.models_dir = os.path.join('models', file_name)
 
     args.config_file_name = file_name
+
+    json.dump(config, open(os.path.join(args.log_dir, f'config.json'), 'w'), indent=4)
 
     return config

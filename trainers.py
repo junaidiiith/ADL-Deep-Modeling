@@ -1,4 +1,3 @@
-from turtle import pos
 from torch.utils.tensorboard import SummaryWriter
 from transformers import DataCollatorForLanguageModeling
 from utils import compute_metrics, compute_auc
@@ -48,7 +47,8 @@ class UMLGPTTrainer:
         self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(self.optimizer, T_max=args.num_epochs)
         self.writer = SummaryWriter(log_dir=args.log_dir)
         self.models_dir = args.models_dir
-        self.model_str = args.config_file_name
+        self.logs_dir = args.log_dir
+        self.results_dir = args.results_dir
         self.compute_metrics_fn = compute_metrics_fn
     
     def train(self, epochs):
@@ -92,7 +92,7 @@ class UMLGPTTrainer:
 
             if test_loss < best_test_loss:
                 best_test_loss = test_loss
-                self.save_model(f'{self.model_str}_best_model.pt')
+                self.save_model(f'best_model.pt')
                 print(f'Best model saved at epoch {epoch}')
     
                 
@@ -130,6 +130,7 @@ class UMLGPTTrainer:
     def save_model(self, file_name):
         if not os.path.exists(self.models_dir):
             os.makedirs(self.models_dir)
+
         file_name = os.path.join(self.models_dir, file_name)
         torch.save(self.model.state_dict(), file_name)
         print(f'Saved model at {file_name}')
@@ -147,7 +148,7 @@ class UMLGPTTrainer:
             print(f'{metric}: {metrics[metric]:.3f}', end=' ')
         print()
 
-        with open(os.path.join(self.args.results_dir, self.args.config_file_name), 'a') as f:
+        with open(os.path.join(self.results_dir, 'results.txt'), 'a') as f:
             f.write(f'Epoch {epoch} {split_type} metrics: ')
             for metric in metrics:
                 f.write(f'{metric}: {metrics[metric]:.3f} ')
@@ -163,6 +164,12 @@ class GNNLinkPredictionTrainer:
         self.model.to(device)
         self.predictor.to(device)
         self.optimizer = torch.optim.Adam(itertools.chain(model.parameters(), predictor.parameters()), lr=args.lr)
+        self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(self.optimizer, T_max=args.num_epochs)
+
+        self.models_dir = args.models_dir
+        self.logs_dir = args.log_dir
+        self.results_dir = args.results_dir
+        self.writer = SummaryWriter(log_dir=args.log_dir)
 
         
         self.edge2index = lambda g: torch.stack(list(g.edges())).contiguous()
@@ -174,6 +181,7 @@ class GNNLinkPredictionTrainer:
         self.predictor.train()
 
         epoch_loss, epoch_acc = 0, 0
+        
         for i, batch in tqdm(enumerate(dataloader), desc=f"Training batches", total=len(dataloader)):
             self.optimizer.zero_grad()
             self.model.zero_grad()
@@ -193,6 +201,7 @@ class GNNLinkPredictionTrainer:
 
             if i % 500 == 0:
                 print(f"Epoch {i} Train Loss: {epoch_loss / (i + 1)} and Train Accuracy: {epoch_acc / (i + 1)}")
+        
 
         epoch_loss /= len(dataloader)
         epoch_acc /= len(dataloader)
@@ -241,11 +250,17 @@ class GNNLinkPredictionTrainer:
         for epoch in tqdm(range(num_epochs), desc="Epochs"):
         # for epoch in range(num_epochs):
             train_loss, train_acc = self.train(dataloader)
+            self.writer.add_scalar(f"Metrics/TrainLoss", train_loss, epoch)
+            self.writer.add_scalar(f"Metrics/TrainAccuracy", train_acc, epoch)
+
             
             if epoch % 10 == 0:
                 print(f"Epoch {epoch} Train Loss: {train_loss}")
             
             test_loss, test_acc = self.test(dataloader)
+            self.writer.add_scalar(f"Metrics/TestLoss", test_loss, epoch)
+            self.writer.add_scalar(f"Metrics/TestAccuracy", test_acc, epoch)
+
 
             if test_acc > max_val_acc:
                 max_val_acc = test_acc
@@ -256,12 +271,29 @@ class GNNLinkPredictionTrainer:
                     'test_loss': test_loss,
                     'test_acc': test_acc
                 })
+                self.save_model(f'best_model.pt')
+            
+            # self.scheduler.step()
+            self.write_results(outputs)
         
         print(f"Max Test Accuracy: {max_val_acc}")
         print(f"Max Train Accuracy: {max_train_acc}")
         max_output = max(outputs, key=lambda x: x['test_acc'])
         return max_output
 
+    def save_model(self, file_name):
+        if not os.path.exists(self.models_dir):
+            os.makedirs(self.models_dir)
+
+        file_name = os.path.join(self.models_dir, file_name)
+        torch.save(self.model.state_dict(), file_name)
+        # print(f'Saved model at {file_name}')
+
+    def write_results(self, outputs):
+        with open(os.path.join(self.results_dir, 'results.txt'), 'a') as f:
+            for output in outputs:
+                f.write(f"Epoch {output['epoch']} Train Loss: {output['train_loss']} and Test Loss: {output['test_loss']} and Test Accuracy: {output['test_acc']}\n")
+        # print(f"Results written to {os.path.join(self.results_dir, 'results.txt')}")
 
 
 def get_uml_gpt(input_dim, args):
@@ -282,7 +314,7 @@ def get_uml_gpt(input_dim, args):
 def train_hugging_face_gpt(data, args):
     results = dict()
     model_name = args.gpt_model
-    tokenizer = get_pretrained_lm_tokenizer(model_name, special_tokens=args.special_tokens)
+    tokenizer = get_pretrained_lm_tokenizer(model_name)
     model = AutoModelForCausalLM.from_pretrained(model_name)
     model.resize_token_embeddings(len(tokenizer))
     if tokenizer.pad_token_id is None:
@@ -338,7 +370,7 @@ def train_hugging_face_gpt(data, args):
     print('Evaluating on unseen set...')
     results['unseen'] = trainer.evaluate(dataset['unseen'])
 
-    trainer.save_model(os.path.join(args.log_dir, f'{args.config_file_name}_{model_name}'))
+    trainer.save_model(os.path.join(args.models_dir, f'best_model'))
     print('Done!')
 
 
@@ -349,6 +381,7 @@ def get_tokenizer(tokenizer_name, data=None):
         tokenizer = get_pretrained_lm_tokenizer(tokenizer_name)
         print("Done!")
     else:
+        assert tokenizer_name == 'word', "Only word tokenizer is supported for UMLGPT"
         print("Creating word tokenizer...")
         tokenizer = get_word_tokenizer_tokenizer(data)
         print("Done!")
@@ -357,8 +390,7 @@ def get_tokenizer(tokenizer_name, data=None):
 
 
 def train_umlgpt(dataset, args):
-    tokenizer = get_tokenizer(args.tokenizer, dataset)
-        
+    tokenizer = get_tokenizer(args.tokenizer) if args.tokenizer != 'word' else get_tokenizer('word', dataset)
     print("Tokenize dataset...")
     tokenized_dataset = get_generative_uml_dataset(dataset, tokenizer)
     print("Done!")
@@ -374,7 +406,7 @@ def train_umlgpt(dataset, args):
 
     print("Training...")
     trainer.train(args.num_epochs)
-    trainer.save_model(f'{args.trainer}_uml_gpt_{args.num_epochs}.pt')
+    trainer.save_model(f'final_model.pt')
 
 
 def get_classification_model(model_name, num_labels, tokenizer):
@@ -392,7 +424,7 @@ def get_classification_model(model_name, num_labels, tokenizer):
 
 
 def train_hf_for_classification(dataset, tokenizer, args):
-    model_name = args.model_name
+    model_name = args.classification_model if args.from_pretrained is None else args.from_pretrained
     batch_size = args.batch_size
     train, test, unseen = dataset['train'], dataset['test'], dataset['unseen']
     # Show the training loss with every epoch

@@ -108,19 +108,19 @@ def get_promptized_data_for_generation(data):
     return promptized_data
 
 
-def get_data_for_classification(data, class_type='super'):
-    if class_type == 'super':
+def get_classification_dataset(data, tokenizer, encoder, class_type):
+    if class_type == 'super_type':
         promptized_data = get_promptized_data_for_super_type_classification(data)
-    else:
+    elif class_type == 'entity':
         promptized_data = get_promptized_data_for_entity_classification(data)
-    return promptized_data
-
-
-def get_classification_dataset(data, tokenizer, encoder, class_type='super', multi_label=False):
-    if class_type == 'super':
-        return get_super_type_classification_dataset(data, tokenizer, encoder, multi_label=multi_label)
     else:
-        return get_entity_classification_dataset(data, tokenizer, encoder)
+        raise ValueError(f"Class type {class_type} not supported")
+
+    dataset = {
+        split_type: UMLNodeDataset(
+            promptized_data[split_type], tokenizer, encoder) for split_type in promptized_data
+    }
+    return dataset
 
 
 def get_super_type_labels(super_types, super_type_map, multi_label=False):
@@ -166,20 +166,6 @@ def get_word_tokenizer_tokenizer(data, lower=True, special_tokens=SPECIAL_TOKENS
 def get_generative_uml_dataset(data, tokenizer):
     dataset = {
         split_type: GenerativeUMLDataset(data[split_type], tokenizer) for split_type in data
-    }
-    return dataset
-
-def get_super_type_classification_dataset(data, tokenizer, super_type_map, multi_label=False):
-    dataset = {
-        split_type: SuperTypeClassificationDataset(
-            data[split_type], tokenizer, super_type_map, multi_label=multi_label) for split_type in data
-    }
-    return dataset
-
-def get_entity_classification_dataset(data, tokenizer, label_map):
-    dataset = {
-        split_type: EntityClassificationDataset(
-            data[split_type], tokenizer, label_map) for split_type in data
     }
     return dataset
 
@@ -464,34 +450,34 @@ class GenerativeUMLDataset(Dataset):
         }
     
 
-class SuperTypeClassificationDataset(Dataset):
-    def __init__(self, data, tokenizer, super_type_map, multi_label=False):
-        super().__init__()
-        self.data = data
-        super_type_inputs = [i[0] for i in data]
-        super_type_labels = [i[1] for i in data]
-        if isinstance(tokenizer, VocabTokenizer):
-            self.inputs = tokenizer.batch_encode(super_type_inputs, return_tensors='pt', max_length='percentile')
-        else:
-            max_token_length = get_encoding_size(super_type_inputs, tokenizer)
-            self.inputs = tokenizer(super_type_inputs, padding=True, return_tensors='pt', max_length=max_token_length, truncation=True)
-        self.labels = get_super_type_labels(super_type_labels, super_type_map, multi_label=multi_label)
-        self.i2c = {v: k for k, v in super_type_map.items()}
-        self.multi_label = multi_label
-        self.num_classes = len(super_type_map)
+# class SuperTypeClassificationDataset(Dataset):
+#     def __init__(self, data, tokenizer, super_type_map, multi_label=False):
+#         super().__init__()
+#         self.data = data
+#         super_type_inputs = [i[0] for i in data]
+#         super_type_labels = [i[1] for i in data]
+#         if isinstance(tokenizer, VocabTokenizer):
+#             self.inputs = tokenizer.batch_encode(super_type_inputs, return_tensors='pt', max_length='percentile')
+#         else:
+#             max_token_length = get_encoding_size(super_type_inputs, tokenizer)
+#             self.inputs = tokenizer(super_type_inputs, padding=True, return_tensors='pt', max_length=max_token_length, truncation=True)
+#         self.labels = get_super_type_labels(super_type_labels, super_type_map, multi_label=multi_label)
+#         self.i2c = {v: k for k, v in super_type_map.items()}
+#         self.multi_label = multi_label
+#         self.num_classes = len(super_type_map)
     
-    def __len__(self):
-        return len(self.data)
+#     def __len__(self):
+#         return len(self.data)
     
-    def __getitem__(self, idx):
-        return {
-            'input_ids': self.inputs['input_ids'][idx],
-            'attention_mask': self.inputs['attention_mask'][idx],
-            'labels': self.labels[idx]
-        }
+#     def __getitem__(self, idx):
+#         return {
+#             'input_ids': self.inputs['input_ids'][idx],
+#             'attention_mask': self.inputs['attention_mask'][idx],
+#             'labels': self.labels[idx]
+#         }
 
 
-class EntityClassificationDataset(Dataset):
+class UMLNodeDataset(Dataset):
     def __init__(self, data, tokenizer, label_map):
         super().__init__()
         self.data = data

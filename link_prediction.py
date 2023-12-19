@@ -5,6 +5,7 @@ from graph_utils import get_graph_data
 from data_generation_utils import get_kfold_lp_data
 from utils import create_run_config
 from models import UMLGPT
+from transformers import AutoModel
 from trainers import get_tokenizer
 from data_generation_utils import LinkPredictionDataset
 from dgl.dataloading import GraphDataLoader
@@ -24,10 +25,24 @@ def collate_graphs(graphs):
     return collated_graph
 
 
+def import_model(args):
+    try:
+        if args.gpt_model == 'uml-gpt':
+            assert args.from_pretrained, "Pretrained model path is required for link prediction to get node embeddings"
+            return UMLGPT.from_pretrained(args.from_pretrained)
+        else:
+            if args.from_pretrained:
+                return AutoModel.from_pretrained(args.from_pretrained)
+            else:
+                AutoModel.from_pretrained(args.gpt_model)
+
+    except Exception as e:
+        print(e)
+        raise Exception("Could not import model")
+    
 
 def train_link_prediction(graphs, args):
-    assert args.from_pretrained, "Pretrained model path is required for link prediction to get node embeddings"
-    language_model = UMLGPT.from_pretrained(args.from_pretrained)
+    language_model = import_model(args)
     tokenizer = get_tokenizer(args.tokenizer)
     input_dim = language_model.token_embedding_table.weight.data.shape[1]
 
@@ -70,13 +85,11 @@ def train_link_prediction(graphs, args):
 if __name__ == '__main__':
     
     args = parse_args()
-    
+    args.stage = 'lp'
     create_run_config(args)
     data_dir = args.data_dir
-    args.graphs_file = os.path.join(data_dir, args.graphs_file)
-
-
-    graph_data = get_graph_data(args.graphs_file)
+    
+    graph_data = get_graph_data(os.path.join(data_dir, args.graphs_file))
     label_map, super_type_map = graph_data['entities_encoder'], graph_data['super_types_encoder']
     inverse_label_map = {v: k for k, v in label_map.items()}
     inverse_super_type_map = {v: k for k, v in super_type_map.items()}
