@@ -84,3 +84,4 @@ if __name__ == '__main__':
             train_ontouml_gpt_classification(data, label_encoder, compute_metrics_fn=get_recommendation_metrics, args=args)
         else:
             pretrained_lm_sequence_classification(data, label_encoder, args)
+        break

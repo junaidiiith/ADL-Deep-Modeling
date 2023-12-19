@@ -65,13 +65,13 @@ This file encompasses all implemented PyTorch `nn.Module` classes, such as UMLGP
 This module houses all necessary methods and classes for extracting data from JSON files of OntoUML models within the `datasets` folder.
 
 #### [parameters.py](parameters.py)
-All command-line argument parameters are contained and explained in this file. [Link to parameters.py](parameters.py)
+All command-line argument parameters are contained and explained in this file.
 
 #### [pretraining.py](pretraining.py)
 This script executes the pretraining phase on UML models data.
 
 #### [uml_classification.py](uml_classification.py)
-This script performs sequence classification on UML models, predicting the UML class name or the UML abstract class of a UML class. It supports specifying a pretrained tokenizer or a custom vocab tokenizer. The model for classification can be an untrained UMLGPT, a pretrained UMLGPT model, or any model from the Hugging Face library. [Link to uml_classification.py](uml_classification.py)
+This script performs sequence classification on UML models, predicting the UML class name or the UML abstract class of a UML class. It supports specifying a pretrained tokenizer or a custom vocab tokenizer. The model for classification can be an untrained UMLGPT, a pretrained UMLGPT model, or any model from the Hugging Face library.
 
 #### [utils.py](utils.py)
 This file contains methods to calculate metrics on the predictions.
@@ -90,6 +90,15 @@ This script is used to create node triples for OntoUML classes. In this case, th
 
 #### [trainer.py](trainer.py)
 This file specifies all the trainers for the three different tasks.
+
+
+## Setting up to run
+
+Install dependencies - The dependencies are available in requirements.txt file and can be install by executing - 
+
+```bash
+pip install -r requirements.txt
+```
 
 ## Run Configurations
 
