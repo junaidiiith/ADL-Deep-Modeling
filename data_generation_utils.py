@@ -9,8 +9,9 @@ from nltk.tokenize import word_tokenize
 import torch
 import numpy as np
 from utils import clean_text
-from models import get_embedding
+from models import UMLGPT, UMLGPTClassifier
 
+device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
 SSP = "<superType>"
 ESP = "</superType>"
@@ -207,7 +208,7 @@ def get_gpt2_tokenized_data(data, tokenizer):
 def get_gpt2_dataset(data, tokenizer):
     tokenized_data = get_gpt2_tokenized_data(data, tokenizer)
     dataset = {
-        split_type: GPT2Dataset(tokenized_data[split_type]) for split_type in data
+        split_type: EncodingsDataset(tokenized_data[split_type]) for split_type in data
     }
     return dataset
 
@@ -304,6 +305,43 @@ def get_kfold_lp_data(data, seed=42, test_size=0.1):
         
         i += 1
         yield data
+
+
+def get_embedding(model, encodings, pooling='last'):
+    encoding_dataset = EncodingsDataset(encodings)
+    encoding_dataloader = torch.utils.data.DataLoader(encoding_dataset, batch_size=128, shuffle=False)
+    model.eval()
+
+    with torch.no_grad():
+        embeddings = list()
+        for batch in encoding_dataloader:
+
+            if isinstance(model, UMLGPT) or isinstance(model, UMLGPTClassifier):
+                outputs = model.get_embedding(batch['input_ids'].to(device), batch['attention_mask'].to(device))
+            else:
+                encodings = {k: v.to(device) for k, v in batch.items()}
+                outputs = model(**batch)
+
+            outputs = outputs.cpu().detach()
+            if pooling == 'last':
+                outputs = outputs[:, -1, :]
+            elif pooling == 'mean':
+                outputs = torch.mean(outputs, dim=1)
+            elif pooling == 'max':
+                outputs = torch.max(outputs, dim=1)[0]
+            elif pooling == 'min':
+                outputs = torch.min(outputs, dim=1)[0]
+            elif pooling == 'sum':
+                outputs = torch.sum(outputs, dim=1)
+            elif pooling == 'cls':
+                outputs = outputs[:, 0, :]
+            else:
+                raise ValueError(f"Pooling {pooling} not supported")
+            embeddings.append(outputs)
+        
+        embeddings = torch.cat(embeddings, dim=0)
+        
+    return embeddings
 
 
 class VocabTokenizer:
@@ -479,7 +517,7 @@ class EntityClassificationDataset(Dataset):
             'labels': self.labels[idx]
         }
 
-class GPT2Dataset(Dataset):
+class EncodingsDataset(Dataset):
     def __init__(self, tokenized):
         self.tokenized = tokenized
     
@@ -496,6 +534,8 @@ class LinkPredictionDataset(DGLDataset):
         self.raw_graphs = graphs
         self.tokenizer = tokenizer
         self.model = model
+        self.model.to(device)
+
         self.test_size = test_size
         self.split_type = split_type
         
@@ -522,8 +562,9 @@ class LinkPredictionDataset(DGLDataset):
 
         node_strs = [promptize_node(g, n) for n in g.nodes()]
         max_token_length = get_encoding_size(node_strs, self.tokenizer)
-        node_encodings = self.tokenizer(node_strs, padding=True, truncation=True, max_length=max_token_length, return_tensors='pt')
-        node_embeddings = get_embedding(self.model, node_encodings).cpu()
+        node_encodings = self.tokenizer(
+            node_strs, padding=True, truncation=True, max_length=max_token_length, return_tensors='pt')
+        node_embeddings = get_embedding(self.model, node_encodings)
         pos_neg_graphs = get_pos_neg_graphs(g, self.test_size)        
         
         dgl_graph = pos_neg_graphs['train_g']

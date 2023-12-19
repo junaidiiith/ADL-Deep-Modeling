@@ -35,6 +35,7 @@ def parse_args():
     parser.add_argument("--num_layers", type=int, default=6)
     parser.add_argument("--num_heads", type=int, default=8)
     parser.add_argument("--block_size", type=int, default=512)
+    parser.add_argument("--pooling", type=str, default='last', choices=['mean', 'max', 'cls', 'sum', 'last'])
 
     parser.add_argument("--pretrained", action="store_true")
     

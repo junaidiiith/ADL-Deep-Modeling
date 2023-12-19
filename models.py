@@ -1,6 +1,5 @@
 import torch
 import torch_geometric
-from transformers import AutoModel
 import torch.nn as nn
 
 
@@ -17,29 +16,6 @@ def weights_init(model):
     elif isinstance(model, nn.LayerNorm):
         nn.init.ones_(model.weight.data)
         nn.init.zeros_(model.bias.data)
-
-
-
-def get_embedding(model, encodings, pooling=None):
-    model.to(device)
-    with torch.no_grad():
-        if isinstance(model, UMLGPT) or isinstance(model, UMLGPTClassifier):
-            outputs = model.get_embedding(encodings['input_ids'].to(device), encodings['attention_mask'].to(device))
-        else:
-            encodings = {k: v.to(device) for k, v in encodings.items()}
-            outputs = model(**encodings)
-
-        if pooling is None:
-            return outputs[:, -1, :]
-        elif pooling == 'mean':
-            return outputs.mean(dim=1)
-        elif pooling == 'max':
-            return outputs.max(dim=1)[0]
-        elif pooling == 'cls':
-            return outputs[:, 0, :]
-        else:
-            raise ValueError(f'{pooling} pooling not supported for model')
-
 
 
 class Head(nn.Module):

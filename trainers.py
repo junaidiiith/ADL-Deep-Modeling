@@ -1,7 +1,7 @@
 from turtle import pos
 from torch.utils.tensorboard import SummaryWriter
 from transformers import DataCollatorForLanguageModeling
-from utils import compute_metrics, compute_loss, compute_auc
+from utils import compute_metrics, compute_auc
 import torch
 from tqdm.auto import tqdm
 import os
@@ -27,6 +27,12 @@ def suppress_neptune(trainer):
     for cb in trainer.callback_handler.callbacks:
         if isinstance(cb, NeptuneCallback):
             trainer.callback_handler.remove_callback(cb)
+
+
+def compute_loss(pos_score, neg_score):
+    scores = torch.cat([pos_score, neg_score]).to(device)
+    labels = torch.cat([torch.ones(pos_score.shape[0]), torch.zeros(neg_score.shape[0])]).to(device)
+    return torch.nn.BCEWithLogitsLoss()(scores.float(), labels.float())
 
 
 class UMLGPTTrainer:
@@ -168,7 +174,7 @@ class GNNLinkPredictionTrainer:
         self.predictor.train()
 
         epoch_loss, epoch_acc = 0, 0
-        for batch in dataloader:
+        for i, batch in tqdm(enumerate(dataloader), desc=f"Training batches", total=len(dataloader)):
             self.optimizer.zero_grad()
             self.model.zero_grad()
             self.predictor.zero_grad()
@@ -185,6 +191,9 @@ class GNNLinkPredictionTrainer:
             epoch_loss += loss.item()
             epoch_acc += compute_auc(pos_score, neg_score)
 
+            if i % 500 == 0:
+                print(f"Epoch {i} Train Loss: {epoch_loss / (i + 1)} and Train Accuracy: {epoch_acc / (i + 1)}")
+
         epoch_loss /= len(dataloader)
         epoch_acc /= len(dataloader)
         print(f"Epoch Train Loss: {epoch_loss} and Train Accuracy: {epoch_acc}")
@@ -196,7 +205,7 @@ class GNNLinkPredictionTrainer:
         self.predictor.eval()
         with torch.no_grad():
             epoch_loss, epoch_acc = 0, 0
-            for batch in dataloader:            
+            for _, batch in tqdm(enumerate(dataloader), desc=f"Evaluating batches", total=len(dataloader)):
                 h = self.get_logits(batch['train_g'])
 
                 pos_score = self.get_prediction_score(batch['test_pos_g'], h)
