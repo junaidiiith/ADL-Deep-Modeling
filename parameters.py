@@ -17,6 +17,7 @@ def parse_args():
     parser.add_argument("--tokenizer", type=str, default="bert-base-cased")
 
     parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--test_size", type=float, default=0.2)
     
     
     parser.add_argument("--from_pretrained", type=str, default=None)

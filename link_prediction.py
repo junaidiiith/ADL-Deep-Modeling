@@ -25,15 +25,11 @@ def collate_graphs(graphs):
 
 
 
-def train_link_prediction(data, args):
+def train_link_prediction(graphs, args):
     assert args.from_pretrained, "Pretrained model path is required for link prediction to get node embeddings"
-    model = UMLGPT.from_pretrained(args.from_pretrained)
-    
+    language_model = UMLGPT.from_pretrained(args.from_pretrained)
     tokenizer = get_tokenizer(args.tokenizer)
-    dataset = LinkPredictionDataset(data, tokenizer, model)
-    dataloader = GraphDataLoader(dataset, batch_size=args.batch_size, shuffle=True, collate_fn=collate_graphs)
-
-    input_dim = model.token_embedding_table.weight.data.shape[1]
+    input_dim = language_model.token_embedding_table.weight.data.shape[1]
 
     gnn_model = GNNModel(
         model_name='SAGEConv', 
@@ -50,7 +46,23 @@ def train_link_prediction(data, args):
     )
 
     lp_trainer = GNNLinkPredictionTrainer(gnn_model, predictor, args)
-    lp_trainer.run_epochs(dataloader, args.num_epochs)
+
+    for split_type in graphs:
+        print(f"Training Link Prediction {split_type} graphs")
+        dataset = LinkPredictionDataset(
+            graphs=graphs[split_type], 
+            tokenizer=tokenizer, 
+            model=language_model, 
+            test_size=args.test_size, 
+            split_type=split_type
+        )
+        dataloader = GraphDataLoader(
+            dataset, 
+            batch_size=args.batch_size, 
+            shuffle=True, 
+            collate_fn=collate_graphs
+        )
+        lp_trainer.run_epochs(dataloader, args.num_epochs)
 
 
 
@@ -69,9 +81,8 @@ if __name__ == '__main__':
     inverse_super_type_map = {v: k for k, v in super_type_map.items()}
 
     label_map, super_type_map = graph_data['entities_encoder'], graph_data['super_types_encoder']
-    for i, data in enumerate(get_kfold_lp_data(graph_data)):
+    for i, graphs in enumerate(get_kfold_lp_data(graph_data)):
         break
 
-    for split_type in data:
-        print("Training GNN on split:", split_type, " graphs:", len(data[split_type]))
-        train_link_prediction(data[split_type][:4], args)
+    
+    train_link_prediction(graphs, args)

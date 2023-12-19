@@ -21,10 +21,12 @@ def weights_init(model):
 
 
 def get_embedding(model, encodings, pooling=None):
+    model.to(device)
     with torch.no_grad():
         if isinstance(model, UMLGPT) or isinstance(model, UMLGPTClassifier):
-            outputs = model.get_embedding(encodings['input_ids'], encodings['attention_mask'])
+            outputs = model.get_embedding(encodings['input_ids'].to(device), encodings['attention_mask'].to(device))
         else:
+            encodings = {k: v.to(device) for k, v in encodings.items()}
             outputs = model(**encodings)
 
         if pooling is None:
@@ -311,14 +313,11 @@ class MLPPredictor(nn.Module):
         
         self.layers.append(nn.Linear(h_feats, num_classes))
 
-    def apply_edges(self, edges):
-        h = torch.cat([edges.src['h'], edges.dst['h']], 1)
+
+    def forward(self, x, edge_index):
+        h = torch.cat([x[edge_index[0]], x[edge_index[1]]], dim=-1)
         for layer in self.layers:
             h = layer(h)
-        return {'score': h.squeeze(1)}
-
-    def forward(self, g, h):
-        with g.local_scope():
-            g.ndata['h'] = h
-            g.apply_edges(self.apply_edges)
-            return g.edata['score']
+        
+        h = h.squeeze(1)
+        return h

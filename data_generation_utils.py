@@ -143,7 +143,7 @@ def get_encoding_size(data, tokenizer):
     tokens = tokenizer(data)
     lengths = [len(i) for i in tokens['input_ids']]
     size = int(np.percentile(lengths, 99.5))
-    print("Encoding size: ", size)
+    # print("Encoding size: ", size)
     return size
 
 
@@ -492,11 +492,12 @@ class GPT2Dataset(Dataset):
     
 
 class LinkPredictionDataset(DGLDataset):
-    def __init__(self, graphs, tokenizer, model, test_size=0.2, raw_dir='datasets/LP', save_dir='datasets/LP'):
+    def __init__(self, graphs, tokenizer, model, split_type='train', test_size=0.2, raw_dir='datasets/LP', save_dir='datasets/LP'):
         self.raw_graphs = graphs
         self.tokenizer = tokenizer
         self.model = model
         self.test_size = test_size
+        self.split_type = split_type
         
         super().__init__(name='link_prediction', raw_dir=raw_dir, save_dir=save_dir)
         """
@@ -522,7 +523,7 @@ class LinkPredictionDataset(DGLDataset):
         node_strs = [promptize_node(g, n) for n in g.nodes()]
         max_token_length = get_encoding_size(node_strs, self.tokenizer)
         node_encodings = self.tokenizer(node_strs, padding=True, truncation=True, max_length=max_token_length, return_tensors='pt')
-        node_embeddings = get_embedding(self.model, node_encodings)
+        node_embeddings = get_embedding(self.model, node_encodings).cpu()
         pos_neg_graphs = get_pos_neg_graphs(g, self.test_size)        
         
         dgl_graph = pos_neg_graphs['train_g']
@@ -537,7 +538,7 @@ class LinkPredictionDataset(DGLDataset):
         keys = ['train_pos_g', 'train_neg_g', 'test_pos_g', 'test_neg_g', 'train_g']
         graphs = {k: [g[k] for g in self.graphs] for k in keys}
         for k, v in graphs.items():
-            dgl.save_graphs(os.path.join(self.save_dir, f'{self.name}_{k}.dgl'), v)
+            dgl.save_graphs(os.path.join(self.save_dir, f'{self.name}_{k}_{self.split_type}.dgl'), v)
     
     
     def load(self):
@@ -547,7 +548,7 @@ class LinkPredictionDataset(DGLDataset):
         keys = ['train_pos_g', 'train_neg_g', 'test_pos_g', 'test_neg_g', 'train_g']
         k_graphs = {k: [] for k in keys}
         for k in keys:
-            k_graphs[k] = dgl.load_graphs(os.path.join(self.save_dir, f'{self.name}_{k}.dgl'))[0]
+            k_graphs[k] = dgl.load_graphs(os.path.join(self.save_dir, f'{self.name}_{k}_{self.split_type}.dgl'))[0]
         
         self.graphs = list()
         for i in range(len(k_graphs['train_g'])):
@@ -557,5 +558,6 @@ class LinkPredictionDataset(DGLDataset):
 
         
     def has_cache(self):
-        return os.path.exists(os.path.join(self.save_dir, f'{self.name}_train_g.dgl'))
+        print("Checking if cache exists at: ", os.path.join(self.save_dir, f'{self.name}_train_g_{self.split_type}.dgl'))
+        return os.path.exists(os.path.join(self.save_dir, f'{self.name}_train_g_{self.split_type}.dgl'))
     

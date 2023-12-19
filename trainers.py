@@ -155,6 +155,7 @@ class GNNLinkPredictionTrainer:
         self.model = model
         self.predictor = predictor
         self.model.to(device)
+        self.predictor.to(device)
         self.optimizer = torch.optim.Adam(itertools.chain(model.parameters(), predictor.parameters()), lr=args.lr)
 
         
@@ -174,8 +175,8 @@ class GNNLinkPredictionTrainer:
             
             h = self.get_logits(batch['train_g'])
 
-            pos_score = self.predictor(batch['train_pos_g'], h)
-            neg_score = self.predictor(batch['train_neg_g'], h)
+            pos_score = self.get_prediction_score(batch['train_pos_g'], h)
+            neg_score = self.get_prediction_score(batch['train_neg_g'], h)
             loss = compute_loss(pos_score, neg_score)
 
             loss.backward()
@@ -198,8 +199,8 @@ class GNNLinkPredictionTrainer:
             for batch in dataloader:            
                 h = self.get_logits(batch['train_g'])
 
-                pos_score = self.predictor(batch['test_pos_g'], h)
-                neg_score = self.predictor(batch['test_neg_g'], h)
+                pos_score = self.get_prediction_score(batch['test_pos_g'], h)
+                neg_score = self.get_prediction_score(batch['test_neg_g'], h)
                 loss = compute_loss(pos_score, neg_score)
 
                 epoch_loss += loss.item()
@@ -213,15 +214,16 @@ class GNNLinkPredictionTrainer:
 
     def get_logits(self, g):
         edge_index = self.edge2index(g).to(device)
-        x = g.ndata['h'].float()
+        x = g.ndata['h'].float().to(device)
         h = self.model(x, edge_index)
         return h
+    
 
-
-    def get_prediction(self, h, g):
+    def get_prediction_score(self, g, h):
+        h = h.to(device)
         edge_index = self.edge2index(g).to(device)
-        out = self.predictor(h, edge_index)
-        return out
+        prediction_score = self.predictor(h, edge_index)
+        return prediction_score
 
 
     def run_epochs(self, dataloader, num_epochs):
