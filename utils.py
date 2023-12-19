@@ -124,6 +124,9 @@ def get_recommendation_metrics_multi_label(logits, labels):
 
 
 def compute_auc(pos_score, neg_score):
+    """
+        This method computes the AUC score for the given positive and negative scores
+    """
     scores = torch.cat([pos_score, neg_score]).cpu().detach().numpy()
     labels = torch.cat(
         [torch.ones(pos_score.shape[0]), torch.zeros(neg_score.shape[0])]).cpu().detach().numpy()
@@ -131,6 +134,9 @@ def compute_auc(pos_score, neg_score):
 
 
 def get_eval_stats(eval_result):
+    """
+        This method computes the evaluation stats for the given eval result
+    """
     stats = {
         'loss': eval_result['eval_loss'], 
         'perplexity': math.exp(eval_result['eval_loss']), 
@@ -140,12 +146,19 @@ def get_eval_stats(eval_result):
 
 
 def compute_metrics(eval_preds):
+    """
+        This method computes the metrics for the given eval preds
+        This method is used as a callback in the Trainer class of the transformers library
+    """
     logits, labels = eval_preds
     recommendation_metrics = get_recommendation_metrics(logits, labels)
     return recommendation_metrics
 
 
 def set_seed(seed):
+    """
+        This method sets the seed for random, numpy, and torch libraries
+    """
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
@@ -168,6 +181,9 @@ def get_package_name(obj):
 
 
 def create_run_config(args):
+    """
+        This method creates a run config for the given arguments
+    """
     set_seed(args.seed)
     config = {
         'batch_size': args.batch_size,

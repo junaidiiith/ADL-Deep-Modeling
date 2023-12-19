@@ -6,6 +6,12 @@ from data_generation_utils import get_kfold_lm_data, get_promptized_data_for_gen
 from utils import create_run_config
 
 
+"""
+This file contains the code for pretraining the UML-GPT model.
+The pretraining is done on the graph data.
+"""
+
+
 if __name__ == '__main__':
     args = parse_args()
     args.stage = 'pre'

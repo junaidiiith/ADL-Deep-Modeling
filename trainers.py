@@ -35,6 +35,13 @@ def compute_loss(pos_score, neg_score):
 
 
 class UMLGPTTrainer:
+    """
+        Trainer class for UMLGPT
+        This class is used to train the UMLGPT model
+        The model is trained for the next token prediction or node (super type or entity) classification task
+        In case of token classification, a callable function ``compute_metrics_fn`` is provided
+        This function is used to compute the metrics for the task
+    """
     def __init__(self, model, dataloaders, args, compute_metrics_fn=None):
         self.model = model
         self.model.to(device)
@@ -71,6 +78,8 @@ class UMLGPTTrainer:
                             epoch_metrics[metric] = 0
                         epoch_metrics[metric] += metrics[metric]
 
+                ### Gradient Clipping
+                # This is to prevent exploding gradients
                 torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
                 loss.backward()
                 self.optimizer.step()
@@ -97,6 +106,14 @@ class UMLGPTTrainer:
     
                 
     def evaluate(self, epoch, split_type='test'):
+        """
+            Evaluate the model on the test set
+            Args:
+                epoch: int
+                    The current epoch number
+                split_type: str
+                    The split type to evaluate on
+        """
         self.model.eval()
         eval_metrics = {'loss': 0}
         for batch in tqdm(self.dataloaders[split_type], desc=f'Evaluation'):
@@ -158,6 +175,11 @@ class UMLGPTTrainer:
 
 
 class GNNLinkPredictionTrainer:
+    """
+        Trainer class for GNN Link Prediction
+        This class is used to train the GNN model for the link prediction task
+        The model is trained to predict the link between two nodes
+    """
     def __init__(self, model, predictor, args) -> None:
         self.model = model
         self.predictor = predictor
@@ -297,6 +319,14 @@ class GNNLinkPredictionTrainer:
 
 
 def get_uml_gpt(input_dim, args):
+    """
+        Get the UMLGPT model
+        Args:
+            input_dim: int
+                The input dimension of the model
+            args: Namespace
+                The arguments
+    """
     embed_dim = args.embed_dim
     n_layer = args.num_layers
     n_head = args.num_heads
@@ -312,6 +342,14 @@ def get_uml_gpt(input_dim, args):
 
 
 def train_hugging_face_gpt(data, args):
+    """
+        Train the hugging face GPT model
+        Args:
+            data: dict
+                The data dictionary
+            args: Namespace
+                The arguments
+    """
     results = dict()
     model_name = args.gpt_model
     tokenizer = get_pretrained_lm_tokenizer(model_name)
@@ -375,7 +413,6 @@ def train_hugging_face_gpt(data, args):
 
 
 def get_tokenizer(tokenizer_name, data=None):
-    
     if data is None:
         print("Creating pretrained LM tokenizer...")
         tokenizer = get_pretrained_lm_tokenizer(tokenizer_name)
@@ -390,6 +427,14 @@ def get_tokenizer(tokenizer_name, data=None):
 
 
 def train_umlgpt(dataset, args):
+    """
+        Train the UMLGPT model
+        Args:
+            dataset: dict
+                The dataset dictionary
+            args: Namespace
+                The arguments
+    """
     tokenizer = get_tokenizer(args.tokenizer) if args.tokenizer != 'word' else get_tokenizer('word', dataset)
     print("Tokenize dataset...")
     tokenized_dataset = get_generative_uml_dataset(dataset, tokenizer)
@@ -409,28 +454,42 @@ def train_umlgpt(dataset, args):
     trainer.save_model(f'final_model.pt')
 
 
-def get_classification_model(model_name, num_labels, tokenizer):
-    if 'bert' in model_name:
-        model = AutoModelForSequenceClassification.from_pretrained(pretrained_model_name_or_path=model_name, num_labels=num_labels, ignore_mismatched_sizes=True)
-        model.resize_token_embeddings(len(tokenizer))
-    else:
+def get_hf_classification_model(model_name, num_labels, tokenizer):
+    """
+        Get the hugging face classification model
+    """
+    if 'gpt2' in model_name:
         model_config = GPT2Config.from_pretrained(pretrained_model_name_or_path=model_name, num_labels=num_labels)
         tokenizer.padding_side = "left"
         model = GPT2ForSequenceClassification.from_pretrained(pretrained_model_name_or_path=model_name, config=model_config)
         model.resize_token_embeddings(len(tokenizer)) 
         model.config.pad_token_id = model.config.eos_token_id
+    else:
+        model = AutoModelForSequenceClassification.from_pretrained(
+            pretrained_model_name_or_path=model_name, num_labels=num_labels, ignore_mismatched_sizes=True)
+        model.resize_token_embeddings(len(tokenizer))
         
     return model
 
 
 def train_hf_for_classification(dataset, tokenizer, args):
+    """
+        Train the hugging face classification model
+        Args:
+            dataset: dict
+                The dataset dictionary
+            tokenizer: PreTrainedTokenizer
+                The tokenizer
+            args: Namespace
+                The arguments
+    """
     model_name = args.classification_model if args.from_pretrained is None else args.from_pretrained
     batch_size = args.batch_size
     train, test, unseen = dataset['train'], dataset['test'], dataset['unseen']
     # Show the training loss with every epoch
     logging_steps = 100
     print(f"Using model...{model_name}")
-    model = get_classification_model(model_name, dataset['train'].num_classes, tokenizer)
+    model = get_hf_classification_model(model_name, dataset['train'].num_classes, tokenizer)
     model.resize_token_embeddings(len(tokenizer))
     print("Finetuning model...")
     training_args = TrainingArguments(

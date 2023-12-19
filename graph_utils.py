@@ -14,7 +14,7 @@ edge_name = lambda g, edge: g.edges[edge]['name'] if 'name' in g.edges[edge] els
 
 def masked_graph(graph, mask_perc=0.2):
     """
-    Mask graph by removing 20% of the edges
+    Mask graph by setting 20% of the edges to masked
     """
 
     for edge in graph.edges():
@@ -28,8 +28,14 @@ def masked_graph(graph, mask_perc=0.2):
         graph.edges[edge]['masked'] = True
     
 
-
 def add_node_connections_str(g):
+
+    """
+    Add references and super types to the nodes in the graph
+    This information is later used to generate the node triples
+    For e.g., if a triple would be (node, reference, super_type)
+    """
+
     edges_to_remove = [edge for edge in g.edges() if g.edges[edge]['masked']]
     g.remove_edges_from(edges_to_remove)
 
@@ -56,17 +62,27 @@ def add_node_connections_str(g):
 
 
 def mask_graphs(graphs):
+    """
+        Mask a list of graphs
+    """
     for g in tqdm(graphs, desc='Masking graphs'):
         masked_graph(g)
     
 
 def add_node_connections_str_to_graphs(graphs):
+    """
+        Mask a list of graphs
+        Add node connections to a list of graphs
+    """
     mask_graphs(graphs)
     for g in tqdm(graphs, desc='Adding node strings to graphs'):
         add_node_connections_str(g)
     
 
 def get_node_triples_from_graph(g):
+    """
+        Get node triples from a single graph
+    """
     triples = list()
 
     for n in g.nodes():
@@ -81,6 +97,9 @@ def get_node_triples_from_graph(g):
 
 
 def get_node_triples_from_graphs(graphs):
+    """
+        Get node triples from a list of graphs
+    """
     remove_duplicates = lambda l: list({"$$".join(t): t for t in l}.values())
     triples = list()
 
@@ -95,6 +114,29 @@ def get_node_triples_from_graphs(graphs):
 
 
 def get_graph_data(graphs_file, seed=42):
+    """
+        Take a pickle file containing a list of graphs
+        Split the graphs into train and test
+        Adds node connections to the graphs i.e., references and super types
+        Get node triples from the graphs i.e., (node, references, super types)
+        Encode the entities and super types i.e., map them to integers
+
+        For each node, it can have multiple super types therefore we select the super type
+        with the highest frequency in the dataset
+        
+        Args:
+            graphs_file: pickle file containing a list of graphs
+            seed: random seed for splitting the graphs
+            
+        Returns:
+            train_graphs: list of train graphs
+            test_graphs: list of test graphs
+            train_triples: list of train triples
+            test_triples: list of test triples
+            entities_encoder: dictionary mapping entities to integers
+            super_types_encoder: dictionary mapping super types to integers
+
+    """
     graph_file_name = os.path.basename(graphs_file).split('.')[0]
 
     node_triples_file = os.path.join(os.path.dirname(graphs_file), f'{graph_file_name}_node_triples.pkl')

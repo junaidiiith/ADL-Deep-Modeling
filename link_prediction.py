@@ -15,6 +15,18 @@ from trainers import GNNLinkPredictionTrainer
 
 
 def collate_graphs(graphs):
+    """
+        Collate a list of graphs for the link prediction task
+        This method is used by the GraphDataLoader
+        Given a list of graphs, with each graph having five different dgl graphs
+        This method collates the graphs into a single dgl graph
+        Five dgl graphs in each entry of the list are:
+            1. train_g
+            2. train_pos_g
+            3. test_pos_g
+            4. train_g_neg
+            5. test_g_neg
+    """
     collated_graph = {k: list() for k in graphs[0].keys()}
     for g in graphs:
         for k, v in g.items():
@@ -26,6 +38,11 @@ def collate_graphs(graphs):
 
 
 def import_model(args):
+    """
+        Import the language model for link prediction
+        If the model is uml-gpt, then the pretrained model is loaded from the path provided in args
+        If the model is not uml-gpt, then the model is loaded from the huggingface transformers library
+    """
     try:
         if args.gpt_model == 'uml-gpt':
             assert args.from_pretrained, "Pretrained model path is required for link prediction to get node embeddings"
@@ -42,6 +59,16 @@ def import_model(args):
     
 
 def train_link_prediction(graphs, args):
+    """
+        Train the link prediction task
+        graphs: dictionary of graphs for link prediction
+        args: arguments
+
+        This method creates a language model, a GNN model and a predictor model
+        The language model is used to get node embeddings
+        The GNN model is used to get node embeddings from the graph structure
+        The predictor model is used to predict the link between two nodes
+    """
     language_model = import_model(args)
     tokenizer = get_tokenizer(args.tokenizer)
     input_dim = language_model.token_embedding_table.weight.data.shape[1]

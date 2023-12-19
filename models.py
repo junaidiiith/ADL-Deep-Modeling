@@ -7,6 +7,14 @@ device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
 
 def weights_init(model):
+    """
+    Initialize the weights of the model
+    xaiver_uniform is used for linear layers and embeddings
+    zeros is used for biases
+    xavier_uniform initializes the weights with a uniform distribution
+    This is done to avoid the exploding gradient problem
+    """
+
     if isinstance(model, nn.Linear):
         nn.init.xavier_uniform_(model.weight.data)
         if model.bias is not None:
@@ -32,24 +40,35 @@ class Head(nn.Module):
         self.dropout = nn.Dropout(dropout)
 
     def forward(self, x, attention_mask):
-        B, T, C = x.shape
-        k = self.key(x)   # (B, T, C)
-        q = self.query(x) # (B, T, C)
+        """
+        x: [batch_size, seq_len, embed_dim]
+        attention_mask: [batch_size, seq_len]
+
+        This method computes the attention scores between each token in the sequence
+        """
+        _, _, C = x.shape
+        k = self.key(x)
+        q = self.query(x)
 
         # Compute attention scores ("affinities") only where the mask is non-zero
-        wei = q @ k.transpose(-2, -1) * C**-0.5  # (B, T, C) @ (B, C, T) -> (B, T, T)
-        wei = wei.masked_fill((attention_mask.unsqueeze(1) == 0), float('-inf'))  # (B, T, T)
-        wei = self.softmax(wei)  # (B, T, T)
+        wei = q @ k.transpose(-2, -1) * C**-0.5
+        wei = wei.masked_fill((attention_mask.unsqueeze(1) == 0), float('-inf'))
+        wei = self.softmax(wei)
         wei = self.dropout(wei)
 
         # Perform the weighted aggregation of the values
-        v = self.value(x)  # (B, T, C)
-        out = wei @ v  # (B, T, T) @ (B, T, C) -> (B, T, C)
+        v = self.value(x)
+        out = wei @ v
         return out
 
 
 class MultiHeadAttention(nn.Module):
-    """ multiple heads of self-attention in parallel """
+    """
+    multiple heads of self-attention in parallel
+    This class first splits the embedding dimension into multiple heads
+    Then, each head computes the attention scores between each token in the sequence
+    Finally, the outputs of all the heads are concatenated and projected back to the original embedding dimension
+    """
 
     def __init__(self, embed_dim, num_heads, dropout=0.1):
         super().__init__()
@@ -59,12 +78,17 @@ class MultiHeadAttention(nn.Module):
         self.dropout = nn.Dropout(dropout)
 
     def forward(self, x, attn_mask):
+        """
+        x: [batch_size, seq_len, embed_dim]
+        """
         out = torch.cat([h(x, attn_mask) for h in self.heads], dim=-1)
         out = self.dropout(self.proj(out))
         return out
 
 class FeedFoward(nn.Module):
-    """ a simple linear layer followed by a non-linearity """
+    """
+    a simple linear layer followed by a non-linearity
+    """
 
     def __init__(self, input_dim, embed_dim=None, num_classes=None, dropout=0.1):
         super().__init__()
@@ -104,7 +128,22 @@ class Block(nn.Module):
 
 
 class UMLGPT(nn.Module):
+    """
+    UML-GPT model
 
+    vocab_size: the size of the vocabulary
+    embed_dim: the embedding dimension
+    block_size: the maximum sequence length
+    n_layer: the number of transformer blocks
+    n_head: the number of heads in each transformer block
+    load_pretrained_from: the path to the pretrained model
+
+    This class uses the string representation of the node as the input
+    The string representation is tokenized using the tokenizer
+    The tokenized sequence is then passed through the transformer blocks
+    Finally, the logits for the next token are computed using a linear layer
+    
+    """
     def __init__(self, vocab_size, embed_dim, block_size, n_layer, n_head, load_pretrained_from=None):
         super().__init__()
         # each token directly reads off the logits for the next token from a lookup table
@@ -122,12 +161,25 @@ class UMLGPT(nn.Module):
 
 
     def forward(self, x, attention_mask):
+        """
+        x: [batch_size, seq_len]
+        attention_mask: [batch_size, seq_len]
+
+        This method computes the logits for the next token
+        """
         embeddings = self.get_embedding(x, attention_mask)
         logits = self.lm_head(embeddings)
         return logits
 
 
     def get_loss(self, logits, labels, ignore_index=-100):
+        """
+        logits: [batch_size, seq_len, vocab_size]
+        labels: [batch_size, seq_len]
+
+        This method computes the loss for the next token prediction task
+        This is achieved by shifting the labels by one position and computing the cross entropy loss
+        """
         loss = None
         if labels is not None:
             # Shift so that tokens < n predict n
@@ -140,8 +192,10 @@ class UMLGPT(nn.Module):
         return loss
     
     def get_embedding(self, x, attention_mask):
-        # x: [batch_size, seq_len]
-        # attention_mask: [batch_size, seq_len]
+        """
+        x: [batch_size, seq_len]
+        attention_mask: [batch_size, seq_len]
+        """
         token_embeddings = self.token_embedding_table(x)
         position_ids = torch.arange(x.size(1), dtype=torch.long, device=x.device)
         position_ids = position_ids.unsqueeze(0).expand_as(x)
@@ -175,7 +229,13 @@ class UMLGPT(nn.Module):
     
     
 class UMLGPTClassifier(nn.Module):
+    """
+    UML-GPT model for classification
 
+    model: the UML-GPT model
+    num_classes: the number of classes
+
+    """
     def __init__(self, model, num_classes):
         super().__init__()
         
@@ -226,7 +286,20 @@ class UMLGPTClassifier(nn.Module):
 
 
 class GNNModel(torch.nn.Module):
-  """GraphSage Network"""
+  """
+    A general GNN model created using the PyTorch Geometric library
+    model_name: the name of the GNN model
+    input_dim: the input dimension
+    hidden_dim: the hidden dimension
+    out_dim: the output dimension
+
+    num_layers: the number of GNN layers
+    num_heads: the number of heads in the GNN layer
+    residual: whether to use residual connections
+    l_norm: whether to use layer normalization
+    dropout: the dropout probability
+  
+  """
   def __init__(self, model_name, input_dim, hidden_dim, out_dim, num_layers, num_heads=None, residual=False, l_norm=False, dropout=0.1):
     super(GNNModel, self).__init__()
     gnn_model = getattr(torch_geometric.nn, model_name)
@@ -278,6 +351,18 @@ class GNNModel(torch.nn.Module):
   
 
 class MLPPredictor(nn.Module):
+
+    """
+    An MLP predictor for link prediction
+
+    h_feats: the input dimension
+    num_classes: the number of classes
+    num_layers: the number of layers in the MLP
+
+    This class concatenates the node embeddings of the two nodes in the edge
+    The concatenated embeddings are then passed through an MLP
+    """
+
     def __init__(self, h_feats, num_classes=1, num_layers=2):
         super().__init__()
         self.layers = nn.ModuleList()

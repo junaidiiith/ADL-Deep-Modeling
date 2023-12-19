@@ -3,6 +3,37 @@ import logging
 import os
 os.environ['CUDA_LAUNCH_BLOCKING'] = "1"
 
+"""
+This file defines the parameters for three stages of the pipeline:
+1. Pretraining
+2. Fine-tuning
+3. Link Prediction
+
+The parameters are defined in the parse_args() method.
+
+batch_size: Batch size for training
+num_epochs: Number of epochs for training
+lr: Learning rate for training
+warmup_steps: Number of warmup steps for training
+data_dir: Directory where the graph data is stored
+log_dir: Directory where the logs are stored
+graphs_file: Name of the file where the graph data is stored
+
+classification_model: Name of the classification model to use.
+    Choices: ['uml-gpt', 'bert-base-cased']
+    uml-gpt: UML-GPT model
+    bert-base-cased: BERT model
+
+tokenizer: Name of the tokenizer to use. 
+This tokenizer can be a pretrained tokenizer or a custom tokenizer.
+A custom tokenizer is built using the graph data.
+
+seed: Seed for reproducibility
+test_size: Test size for train-test split
+
+from_pretrained: Path to the pretrained model to use for fine-tuning or link prediction
+models_dir: Directory where the models are stored
+"""
 
 def parse_args():
     parser = argparse.ArgumentParser()

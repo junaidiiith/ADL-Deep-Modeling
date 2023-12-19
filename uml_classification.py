@@ -16,6 +16,24 @@ from utils import create_run_config
 
 
 def train_uml_gpt_classification(data, label_encoder, compute_metrics_fn, args):
+    """
+    This function trains the UML-GPT model for classification.
+
+    This function - 
+        1. creates the dataset
+        2. creates a UMLGPT model using ``args.from_pretrained`` .pth file or from scratch
+        3. creates a UMLGPTClassifier using the UMLGPT model
+        4. creates a UMLGPTTrainer using the UMLGPTClassifier
+        5. trains the UMLGPTTrainer for ``args.num_epochs`` epochs
+
+    Args:
+        data (dict): The graph data for the classification task with train, test, unseen graphs
+        label_encoder (dict): The label encoder
+        compute_metrics_fn (function): The function to compute the metrics
+        args (Namespace): The arguments passed to the script
+    """
+
+
     tokenizer = get_tokenizer(args.tokenizer) if args.tokenizer != 'word' else get_tokenizer('word', data)
     dataset = get_classification_dataset(data, tokenizer, label_encoder, args.class_type)
     model = get_uml_gpt(len(tokenizer), args)
@@ -24,7 +42,19 @@ def train_uml_gpt_classification(data, label_encoder, compute_metrics_fn, args):
     uml_gpt_trainer.train(args.num_epochs)
 
 
-def pretrained_lm_sequence_classification(data, args):
+def pretrained_lm_sequence_classification(data, label_encoder, args):
+
+    """
+    This function trains the Huggingface pretrained language model for sequence classification.
+
+    Args:
+        data (dict): The graph data for the classification task with train, test, unseen graphs
+        label_encoder (dict): The label encoder
+        compute_metrics_fn (function): The function to compute the metrics
+        args (Namespace): The arguments passed to the script
+
+    """
+
     tokenizer = get_tokenizer(args.tokenizer)
     dataset = get_classification_dataset(data, tokenizer, label_encoder, args.class_type)
     train_hf_for_classification(dataset, tokenizer, args)
@@ -48,4 +78,4 @@ if __name__ == '__main__':
     if args.classification_model in ['uml-gpt']:
         train_uml_gpt_classification(data, label_encoder, compute_metrics_fn=get_recommendation_metrics, args=args)
     else:
-        pretrained_lm_sequence_classification(data, args)
+        pretrained_lm_sequence_classification(data, label_encoder, args)
