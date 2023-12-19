@@ -50,6 +50,19 @@ For the first two tasks (sequence classification), the chosen metrics are:
 
 For the third Link Prediction task, the metric chosen is `roc_auc_score`.
 
+Folder structure - 
+
+data_generation_utils.py - this file contains all the methods and classes that are required to create pytorch datasets, extract data from UML models and convert them into strings. 
+
+model2nx.py - this file process the .ecore files of the UML models dataset and stores them into .pkl format
+
+models.py - this file contains all the implemented pytorch nn.Module classes - like UMLGPT, UMLGPTClassifier, MLPPredictor, GNNModel. Moreover, this file also contains nn.Module requires to create the transformer blocks
+
+ontouml_data_utils.py - this file contains all the methods and classes that are requires to extract data from the JSON files of OntoUML models present in the ``datasets`` folder. 
+
+
+
+
 ## Run Configurations
 
 All Run Configurations for the three tasks:
