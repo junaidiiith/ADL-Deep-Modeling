@@ -1,0 +1,9 @@
+dgl
+networkx
+nltk
+numpy
+pyecore
+scikit-learn
+torch
+torch_geometric
+transformers
