@@ -47,8 +47,23 @@ The Link Prediction task uses node embeddings learned from the pretraining phase
 For the first two tasks (sequence classification), the chosen metrics are:
 1. MRR - Mean Reciprocal Rank
 2. Hits@k with k = 1, 3, 5, 10
+3. Precision
 
 For the third Link Prediction task, the metric chosen is `roc_auc_score`.
+
+| Task No. | Metric Name    | Target | Achieved | Based on                                           |
+|----------|-----------------|--------|----------|-----------------------------------------------------|
+| 1        | Hits@10         | 0.48   | 0.496    | Bert Sequence Classifier                            |
+| 2        | Precision       | 0.64   | 0.83     | [1](https://link.springer.com/chapter/10.1007/978-3-031-34560-9_17) and [2](https://www.researchgate.net/profile/Tiago-Prince-Sales/publication/370527243_Inferring_Ontological_Categories_of_OWL_Classes_Using_Foundational_Rules/links/6454ac435762c95ac3742e38/Inferring-Ontological-Categories-of-OWL-Classes-Using-Foundational-Rules.pdf) |
+| 3        | roc_auc_score   | 0.860  | 0.829    | GPT2-based embeddings as opposed to UMLGPT2 embeddings |
+
+For first case, note that these work have the same problem statement, i.e., to predict the class name given the partial model [EClassifier Recall@10 score - 0.4258](https://link.springer.com/article/10.1007/s10270-021-00929-3), [Local Context Recall@10 score - 0.458](https://link.springer.com/article/10.1007/s10270-021-00929-3), however the recall score cannot provide a valid comparison because they have not made the data public. 
+
+For the second case, one of the baselines is my previous work that used word2vec and GNN based node classification to predict the OntoUML stereotype. The second work is a ontological rules based approach to infer the stereotypes. In case of the rule based approach, their hits@1 score is fairly poor - less than 30%, however their hits@3 score is better. However in both case, my approach using embeddings from pretrained language model and finetuning the embeddings for sequence classification task outperform both the works.
+
+For the last case, I could not find any baseline as far as academia is concerned. However, I considered a comparison of embeddings from language models i.e., on one hand, embeddings from a pretrained language model and on the other, embeddings from the UMLGPT model implemented in this project. Both these embeddings are then used to train the GNN model as implemented in this project and it turns out the pretrained embeddings marginally outperform the UMLGPT model.
+
+
 
 ### File Descriptions
 
