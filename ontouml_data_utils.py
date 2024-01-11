@@ -2,6 +2,8 @@ import random
 from collections import defaultdict
 import fnmatch
 import os
+import shutil
+from zipfile import ZipFile
 from sklearn.model_selection import StratifiedKFold
 import torch
 from tqdm.auto import tqdm
@@ -155,9 +157,33 @@ def get_nxg_from_ontouml_map(ontouml_id2obj_map, f_name='out.txt', directed=True
     return g
 
 
+def get_all_files(zip_file_name):
+    """
+        Unzip data_dir zip files and get all the JSON files
+    """
+
+    with ZipFile(zip_file_name, 'r') as zip:
+        zip.extractall()
+        all_files = list()
+        for root, _, files in os.walk('./'):
+            for file in files:
+                all_files.append(os.path.join(root, file))
+    
+    if isinstance(zip_file_name, str):
+        shutil.rmtree(zip_file_name.split(os.sep)[-1].split(".")[0])
+    else:
+        shutil.rmtree(zip_file_name.name.split(os.sep)[-1].split(".")[0])
+                
+    return all_files
+
+
 def get_ontouml_to_nx(data_dir, min_stereotypes=10):
     ontouml_graphs = list()
-    models = find_files_with_extension(data_dir, "json")
+    if data_dir.name.endswith(".zip"):
+        models = get_all_files(data_dir)
+    else:
+        models = find_files_with_extension(data_dir, "json")
+        
     for mfp in tqdm(models, desc=f"Reading {len(models)} OntoUML models"):
         if mfp.endswith(".ecore") or mfp.endswith(".json"):
             json_obj = json.loads(open(mfp, 'r', encoding='iso-8859-1').read())

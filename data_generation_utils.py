@@ -1,4 +1,5 @@
 import os
+import pickle
 from dgl.data import DGLDataset
 import dgl
 from sklearn.model_selection import StratifiedKFold
@@ -10,6 +11,8 @@ import torch
 import numpy as np
 from utils import clean_text
 from models import UMLGPT, UMLGPTClassifier
+from stqdm import stqdm
+from constants import *
 
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
@@ -22,24 +25,6 @@ device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 """
 Constants used as special tokens to tokenize graph data
 """
-
-SSP = "<superType>"
-ESP = "</superType>"
-SEN = "<entity>"
-EEN = "</entity>"
-
-SRP = "<relations>"
-ERP = "</relations>"
-
-PAD = "<pad>"
-UNK = "<unk>"
-SOS = "<s>"
-EOS = "</s>"
-MASK = "<mask>"
-SEP = "<sep>"
-
-SPECIAL_TOKENS = [PAD, UNK, SOS, EOS, MASK, SEP, SSP, ESP, SEN, EEN, SRP, ERP]
-
 
 
 """
@@ -525,7 +510,8 @@ class VocabTokenizer:
         """
 
         assert isinstance(x, list), "Input must be a list"
-        batch_encodings = [self.encode(i) for i in tqdm(x, desc='Encoding')]
+        # batch_encodings = [self.encode(i) for i in tqdm(x, desc='Encoding')]
+        batch_encodings = [self.encode(i) for i in x]
         lengths = [len(i) for i in batch_encodings]
         perc_max_length = int(np.percentile(lengths, 99.95))
         max_length = 512 if max_length is None else (perc_max_length if max_length == 'percentile' else max_length)
@@ -603,7 +589,17 @@ class VocabTokenizer:
         self.index_to_key = {v: k for k, v in self.vocab.items()}
     
     def __str__(self) -> str:
-        return f"VocabTokenizer(vocab_size={len(self.vocab)})"
+        return f"VocabTokenizer(vsize={len(self.vocab)})"
+    
+    def save_pretrained(self, save_directory):
+        """
+        ``save_pretrained`` function saves the tokenizer to the given directory
+        """
+        if not os.path.exists(save_directory):
+            os.makedirs(save_directory)
+        tokenizer_file = os.path.join(save_directory, 'tokenizer.pkl')
+        pickle.dump(self, open(tokenizer_file, 'wb'))
+        print(f"Tokenizer saved to {tokenizer_file}")
 
 
 class GenerativeUMLDataset(Dataset):
@@ -701,15 +697,15 @@ class LinkPredictionDataset(DGLDataset):
 
     """
     def __init__(self, graphs, tokenizer, \
-                 model, split_type='train', test_size=0.2, raw_dir='datasets/LP', save_dir='datasets/LP'):
+                 model, prefix='train', test_size=0.2, raw_dir='datasets/LP', save_dir='datasets/LP'):
         self.raw_graphs = graphs
         self.tokenizer = tokenizer
         self.model = model
         self.model.to(device)
 
         self.test_size = test_size
-        self.split_type = split_type
-        super().__init__(name='link_prediction', raw_dir=raw_dir, save_dir=save_dir)
+        self.prefix = prefix
+        super().__init__(name='lp', raw_dir=raw_dir, save_dir=save_dir)
         
         
     def __getitem__(self, idx):
@@ -722,7 +718,8 @@ class LinkPredictionDataset(DGLDataset):
         self.graphs = self._prepare()
 
     def _prepare(self):
-        prepared_graphs = [self._prepare_graph(g) for g in tqdm(self.raw_graphs, desc='Preparing graphs')]
+        print("Cache does not exist. Preparing graphs...")
+        prepared_graphs = [self._prepare_graph(g) for g in stqdm(self.raw_graphs, desc='Preparing graphs')]
         return prepared_graphs
     
     def _prepare_graph(self, g):
@@ -742,9 +739,7 @@ class LinkPredictionDataset(DGLDataset):
         }
         """
         node_strs = [promptize_node(g, n) for n in g.nodes()]
-        max_token_length = get_encoding_size(node_strs, self.tokenizer)
-        node_encodings = self.tokenizer(
-            node_strs, padding=True, truncation=True, max_length=max_token_length, return_tensors='pt')
+        node_encodings = self.tokenizer.batch_encode(node_strs, return_tensors='pt', max_length='percentile')
         node_embeddings = get_embedding(self.model, node_encodings)
         pos_neg_graphs = get_pos_neg_graphs(g, self.test_size)        
         
@@ -761,7 +756,7 @@ class LinkPredictionDataset(DGLDataset):
         
         graphs = {k: [g[k] for g in self.graphs] for k in keys}
         for k, v in graphs.items():
-            dgl.save_graphs(os.path.join(self.save_dir, f'{self.name}_{k}_{self.split_type}.dgl'), v)
+            dgl.save_graphs(os.path.join(self.save_dir, f'{self.name}_{k}_{self.prefix}.dgl'), v)
     
     
     def load(self):
@@ -771,7 +766,7 @@ class LinkPredictionDataset(DGLDataset):
         keys = ['train_pos_g', 'train_neg_g', 'test_pos_g', 'test_neg_g', 'train_g']
         k_graphs = {k: [] for k in keys}
         for k in keys:
-            k_graphs[k] = dgl.load_graphs(os.path.join(self.save_dir, f'{self.name}_{k}_{self.split_type}.dgl'))[0]
+            k_graphs[k] = dgl.load_graphs(os.path.join(self.save_dir, f'{self.name}_{k}_{self.prefix}.dgl'))[0]
         
         self.graphs = list()
         for i in range(len(k_graphs['train_g'])):
@@ -781,6 +776,6 @@ class LinkPredictionDataset(DGLDataset):
 
         
     def has_cache(self):
-        print("Checking if cache exists at: ", os.path.join(self.save_dir, f'{self.name}_train_g_{self.split_type}.dgl'))
-        return os.path.exists(os.path.join(self.save_dir, f'{self.name}_train_g_{self.split_type}.dgl'))
+        print("Checking if cache exists at: ", os.path.join(self.save_dir, f'{self.name}_train_g_{self.prefix}.dgl'))
+        return os.path.exists(os.path.join(self.save_dir, f'{self.name}_train_g_{self.prefix}.dgl'))
     

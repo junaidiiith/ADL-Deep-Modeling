@@ -1,5 +1,5 @@
-import os
-from parameters import parse_args
+import pickle
+from utils import get_uploaded_file_name
 from graph_utils import get_graph_data
 from data_generation_utils import get_kfold_lp_data
 from utils import create_run_config
@@ -11,7 +11,7 @@ from dgl.dataloading import GraphDataLoader
 import dgl
 from models import GNNModel, MLPPredictor
 from trainers import GNNLinkPredictionTrainer
-
+from constants import *
 
 def collate_graphs(graphs):
     """
@@ -43,9 +43,10 @@ def import_model(args):
         If the model is not uml-gpt, then the model is loaded from the huggingface transformers library
     """
     try:
-        if args.gpt_model == 'uml-gpt':
+        if args.gpt_model == UMLGPTMODEL:
             assert args.from_pretrained, "Pretrained model path is required for link prediction to get node embeddings"
             return UMLGPT.from_pretrained(args.from_pretrained)
+        
         else:
             if args.from_pretrained:
                 return AutoModel.from_pretrained(args.from_pretrained)
@@ -69,8 +70,12 @@ def train_link_prediction(graphs, args):
         The predictor model is used to predict the link between two nodes
     """
     language_model = import_model(args)
-    tokenizer = get_tokenizer(args.tokenizer)
-    input_dim = language_model.token_embedding_table.weight.data.shape[1] if args.gpt_model == 'uml-gpt' else language_model.config.hidden_size
+    if args.tokenizer_file.endswith('.pkl'):
+        tokenizer = pickle.load(open(args.tokenizer_file, 'rb'))
+    else:
+        tokenizer = get_tokenizer(args.tokenizer)
+
+    input_dim = language_model.token_embedding_table.weight.data.shape[1] if args.gpt_model == UMLGPTMODEL else language_model.config.hidden_size
     gnn_model = GNNModel(
         model_name='SAGEConv', 
         input_dim=input_dim, 
@@ -84,18 +89,21 @@ def train_link_prediction(graphs, args):
         h_feats=args.embed_dim,
         num_layers=2,
     )
-
+    # print(language_model, tokenizer, gnn_model, predictor)
     lp_trainer = GNNLinkPredictionTrainer(gnn_model, predictor, args)
 
     for split_type in graphs:
         print(f"Training Link Prediction {split_type} graphs")
-        
+        # with st.empty():
+        #     st.write(f"Training Link Prediction on {split_type} graphs")
+
+        dataset_prefix = f"{split_type}_ip={input_dim}_tok={get_uploaded_file_name(tokenizer)}"
         dataset = LinkPredictionDataset(
             graphs=graphs[split_type], 
             tokenizer=tokenizer, 
             model=language_model, 
             test_size=args.test_size, 
-            split_type=split_type
+            prefix=dataset_prefix
         )
         dataloader = GraphDataLoader(
             dataset, 
@@ -106,22 +114,24 @@ def train_link_prediction(graphs, args):
         lp_trainer.run_epochs(dataloader, args.num_epochs)
 
 
-
-if __name__ == '__main__':
-    
-    args = parse_args()
-    args.stage = 'lp'
+def link_prediction(args):
+    """
+        This function trains the link prediction task
+        It loads the graph data from the path provided in args
+        It then creates the dataset for link prediction
+        It then trains the link prediction task
+    """
     create_run_config(args)
-    data_dir = args.data_dir
-    
-    graph_data = get_graph_data(os.path.join(data_dir, args.graphs_file))
-    label_map, super_type_map = graph_data['entities_encoder'], graph_data['super_types_encoder']
-    inverse_label_map = {v: k for k, v in label_map.items()}
-    inverse_super_type_map = {v: k for k, v in super_type_map.items()}
-
-    label_map, super_type_map = graph_data['entities_encoder'], graph_data['super_types_encoder']
+    graph_data = get_graph_data(args.graphs_file)
     for i, graphs in enumerate(get_kfold_lp_data(graph_data)):
         break
-
     
     train_link_prediction(graphs, args)
+
+
+# if __name__ == '__main__':
+    
+#     args = parse_args()
+#     args.stage = 'lp'
+    # create_run_config(args)
+#     link_prediction(args)

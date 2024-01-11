@@ -2,10 +2,13 @@ import json
 import math
 import os
 import random
+import tempfile
+from streamlit.runtime.uploaded_file_manager import UploadedFile
 import numpy as np
 import re
 from sklearn.metrics import roc_auc_score
 import torch
+from constants import *
 
 
 clean_text = lambda x: re.sub(r'[^a-zA-Z0-9\s]', '', x).strip()
@@ -180,6 +183,12 @@ def get_package_name(obj):
     return getattr(obj, '__name__', None)
 
 
+def get_uploaded_file_name(f):
+    if isinstance(f, UploadedFile):
+        return f.name
+    return f
+
+
 def create_run_config(args):
     """
         This method creates a run config for the given arguments
@@ -195,33 +204,38 @@ def create_run_config(args):
         'num_heads': args.num_heads,
         'block_size': args.block_size,
         'class_type': args.class_type,
-        'gpt_model': args.gpt_model,
-        'tokenizer': args.tokenizer,
+        'gpt_model': get_uploaded_file_name(args.gpt_model),
+        'tokenizer': get_uploaded_file_name(args.tokenizer),
         'pooling': args.pooling,
-        'classification_model': args.classification_model,
-        'from_pretrained': args.from_pretrained,
+        'classification_model': get_uploaded_file_name(args.classification_model),
+        'from_pretrained': get_uploaded_file_name(args.from_pretrained),
     }
     
     file_name = f"{args.stage}_"
     if args.stage == 'pre':
-        if args.gpt_model in ['uml-gpt']:
-            file_name += f"{args.gpt_model}_tok={args.tokenizer}"
+        if config['gpt_model'] in [UMLGPTMODEL]:
+            file_name += f"{config['gpt_model']}_tok={config['tokenizer']}"
         else:
-            file_name += f"{args.gpt_model}"
+            file_name += f"{config['gpt_model']}"
 
     elif args.stage == 'cls':
-        if args.classification_model in ['uml-gpt']:
-            file_name += f"{args.classification_model}_tok={args.tokenizer}"
+        if args.classification_model in [UMLGPTMODEL]:
+            file_name += f"{config['classification_model']}_tok={config['classification_model']}"
         else:
-            file_name += f"{args.classification_model}_tok={args.tokenizer}"
-        file_name += f"_{args.class_type}"
-        file_name += f"_{args.pooling}"
-        file_name += f"_fp={args.from_pretrained if args.from_pretrained else '0'}"
+            file_name += f"{config['classification_model']}_tok={config['tokenizer']}"
+        file_name += f"_{config['class_type']}"
+        file_name += f"_{config['pooling']}"
+        file_name += f"{config['from_pretrained'] if config['from_pretrained'] else ''}"
 
     elif args.stage == 'lp':
-        assert args.from_pretrained, "Pretrained model path is required for link prediction to get node embeddings"
-        file_name += f"{args.gpt_model}_tok={args.tokenizer}"
-
+        assert config['from_pretrained'], "Pretrained model path is required for link prediction to get node embeddings"
+        file_name += f"{config['gpt_model']}_tok={config['tokenizer']}"
+    
+    elif args.stage == 'ontouml_cls':
+        file_name += f"{config['classification_model']}_tok={config['tokenizer']}"
+        file_name += f"_fp={config['from_pretrained']}"
+        file_name += f"_distance={args.distance}"
+        file_name += f"_distance={args.exclude_limit}"
 
     
     os.makedirs(os.path.join(args.log_dir, file_name), exist_ok=True)
@@ -235,6 +249,17 @@ def create_run_config(args):
 
     args.config_file_name = file_name
 
-    json.dump(config, open(os.path.join(args.log_dir, f'config.json'), 'w'), indent=4)
+    json.dump(config, open(os.path.join(args.models_dir, f'config.json'), 'w'), indent=4)
 
     return config
+
+
+def save_temporary_uploaded_file(uploaded_file, ext='.pt'):
+    if uploaded_file is not None:
+        # Create a temporary file
+        with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as tmpfile:
+            # Write the uploaded .pt file's content to the temporary file
+            tmpfile.write(uploaded_file.getvalue())
+            tmpfile_path = tmpfile.name
+    
+    return tmpfile_path

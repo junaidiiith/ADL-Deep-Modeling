@@ -1,3 +1,4 @@
+from streamlit.runtime.uploaded_file_manager import UploadedFile
 from collections import Counter
 import json
 from math import e
@@ -112,6 +113,20 @@ def get_node_triples_from_graphs(graphs):
     return remove_duplicates(triples)
 
 
+def get_graphs(graphs_file):
+    if isinstance(graphs_file, str):
+        graph_file_name = os.path.basename(graphs_file).split('.')[0]
+        node_triples_file = os.path.join(os.path.dirname(graphs_file), f'{graph_file_name}_node_triples.pkl')
+        graphs = pickle.load(open(graphs_file, 'rb'))
+
+    elif isinstance(graphs_file, UploadedFile):
+        graphs = pickle.loads(graphs_file.getvalue())
+        graph_file_name = graphs_file.name.split('.')[0]
+        node_triples_file = os.path.join('uploaded_data', f'{graph_file_name}_node_triples.pkl')
+    
+
+    return graphs, node_triples_file
+
 
 def get_graph_data(graphs_file, seed=42):
     """
@@ -137,14 +152,12 @@ def get_graph_data(graphs_file, seed=42):
             super_types_encoder: dictionary mapping super types to integers
 
     """
-    graph_file_name = os.path.basename(graphs_file).split('.')[0]
 
-    node_triples_file = os.path.join(os.path.dirname(graphs_file), f'{graph_file_name}_node_triples.pkl')
+    graphs, node_triples_file = get_graphs(graphs_file)
+
     if os.path.exists(node_triples_file):
         data = pickle.load(open(node_triples_file, 'rb'))
         return data
-
-    graphs = pickle.load(open(graphs_file, 'rb'))
 
     train_graphs, test_graphs = train_test_split(graphs, test_size=0.05, random_state=seed)
 
@@ -198,15 +211,7 @@ def get_graph_data(graphs_file, seed=42):
     pickle.dump(data, open(node_triples_file, 'wb'))
     return data
 
-
-
 # if __name__ == "__main__":
 #     random.seed(42)
-
-
-#     data = get_graph_data('datasets/ecore_graph_pickles/combined_graphs_clean.pkl')
-
-    # print("Training triples:", len(data['train_triples']))
-    # print("Test triples:", len(data['test_triples']))
-
-    # triples = json.dump({'train_data': data['train_triples'], 'test_data': data['test_triples']}, open(f'triples.json', 'w'), indent=4)
+#     data = get_graph_data('datasets/test_data_graphs.pkl')
+#     triples = json.dump({'train_data': data['train_triples'], 'test_data': data['test_triples']}, open(f'triples.json', 'w'), indent=4)
