@@ -183,10 +183,14 @@ def get_package_name(obj):
     return getattr(obj, '__name__', None)
 
 
-def get_uploaded_file_name(f):
-    if isinstance(f, UploadedFile):
-        return f.name
-    return f
+
+def get_attr_name(uploaded_file):
+    """
+        This method returns the uploaded file from the streamlit file uploader
+    """
+    if isinstance(uploaded_file, UploadedFile):
+        return uploaded_file.name
+    return uploaded_file
 
 
 def create_run_config(args):
@@ -194,46 +198,29 @@ def create_run_config(args):
         This method creates a run config for the given arguments
     """
     set_seed(args.seed)
-    config = {
-        'batch_size': args.batch_size,
-        'num_epochs': args.num_epochs,
-        'lr': args.lr,
-        'warmup_steps': args.warmup_steps,
-        'embed_dim': args.embed_dim,
-        'num_layers': args.num_layers,
-        'num_heads': args.num_heads,
-        'block_size': args.block_size,
-        'class_type': args.class_type,
-        'gpt_model': get_uploaded_file_name(args.gpt_model),
-        'tokenizer': get_uploaded_file_name(args.tokenizer),
-        'pooling': args.pooling,
-        'classification_model': get_uploaded_file_name(args.classification_model),
-        'from_pretrained': get_uploaded_file_name(args.from_pretrained),
-    }
+    config = {k: get_attr_name(getattr(args, k)) for k in vars(args)}
     
     file_name = f"{args.stage}_"
-    if args.stage == 'pre':
-        if config['gpt_model'] in [UMLGPTMODEL]:
-            file_name += f"{config['gpt_model']}_tok={config['tokenizer']}"
+    if args.stage == PRETRAINING:
+        if config[GPT_MODEL] in [UMLGPTMODEL]:
+            file_name += f"{config[GPT_MODEL]}_tok={config['tokenizer']}"
         else:
-            file_name += f"{config['gpt_model']}"
+            file_name += f"{config[GPT_MODEL]}"
 
-    elif args.stage == 'cls':
-        if args.classification_model in [UMLGPTMODEL]:
-            file_name += f"{config['classification_model']}_tok={config['classification_model']}"
+    elif args.stage == CLASSIFICATION:
+        if args.classification_model not in [UMLGPTMODEL]:
+            file_name += f"{config[CLASSIFICATION_MODEL]}_tok={config[CLASSIFICATION_MODEL]}"
         else:
-            file_name += f"{config['classification_model']}_tok={config['tokenizer']}"
-        file_name += f"_{config['class_type']}"
-        file_name += f"_{config['pooling']}"
-        file_name += f"{config['from_pretrained'] if config['from_pretrained'] else ''}"
+            file_name += f"{config[CLASSIFICATION_MODEL]}_tok={config['tokenizer']}"
+        file_name += f"_{config[CLASSIFICATION_TYPE]}"
+        file_name += f"{config[FROM_PRETRAINED] if config[FROM_PRETRAINED] else ''}"
 
-    elif args.stage == 'lp':
-        assert config['from_pretrained'], "Pretrained model path is required for link prediction to get node embeddings"
-        file_name += f"{config['gpt_model']}_tok={config['tokenizer']}"
+    elif args.stage == LINK_PREDICTION:
+        file_name += f"{config[EMBEDDING_MODEL]}_tok={config['tokenizer']}"
     
-    elif args.stage == 'ontouml_cls':
-        file_name += f"{config['classification_model']}_tok={config['tokenizer']}"
-        file_name += f"_fp={config['from_pretrained']}"
+    elif args.stage == ONTOML_CLS:
+        file_name += f"{config[CLASSIFICATION_MODEL]}_tok={config['tokenizer']}"
+        file_name += f"_fp={config[FROM_PRETRAINED]}"
         file_name += f"_distance={args.distance}"
         file_name += f"_distance={args.exclude_limit}"
 
@@ -244,10 +231,13 @@ def create_run_config(args):
     os.makedirs(os.path.join('results', file_name), exist_ok=True)
     args.results_dir = os.path.join('results', file_name)
     
-    os.makedirs(os.path.join('models', file_name), exist_ok=True)
-    args.models_dir = os.path.join('models', file_name)
+    os.makedirs(os.path.join(MODELS_DIR, file_name), exist_ok=True)
+    args.models_dir = os.path.join(MODELS_DIR, file_name)
 
     args.config_file_name = file_name
+
+    print(config)
+    print(args.models_dir)
 
     json.dump(config, open(os.path.join(args.models_dir, f'config.json'), 'w'), indent=4)
 
@@ -263,3 +253,13 @@ def save_temporary_uploaded_file(uploaded_file, ext='.pt'):
             tmpfile_path = tmpfile.name
     
     return tmpfile_path
+
+
+
+def get_plms(task_type, model_name):
+    plms = [
+        f for f in os.listdir(MODELS_DIR) \
+        if os.path.isdir(os.path.join(MODELS_DIR, f)) and \
+        f.startswith(f'{task_type}_{model_name}')
+    ]
+    return plms

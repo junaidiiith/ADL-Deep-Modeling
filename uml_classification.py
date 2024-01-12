@@ -69,7 +69,7 @@ def pretrained_lm_sequence_classification(data, label_encoder, args):
 
 def uml_classification(args):
     config = create_run_config(args)
-    st.json(config)
+    # st.json(config)
     graph_data = get_graph_data(args.graphs_file)
     entity_map, super_types_map = graph_data['entities_encoder'], graph_data['super_types_encoder']
     for i, data in enumerate(get_kfold_lm_data(graph_data, seed=args.seed)):

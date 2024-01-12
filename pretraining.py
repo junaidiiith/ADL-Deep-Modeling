@@ -34,7 +34,7 @@ def main(args):
         train_hugging_face_gpt(dataset, args)
 
 
-if __name__ == '__main__':
-    args = parse_args()
-    args.stage = 'pre'
-    main(args)
+# if __name__ == '__main__':
+#     args = parse_args()
+#     args.stage = 'pre'
+#     main(args)

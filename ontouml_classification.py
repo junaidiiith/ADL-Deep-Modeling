@@ -26,13 +26,14 @@ def pretrained_lm_sequence_classification(data, label_encoder, args):
 
     """
 
-    tokenizer = get_tokenizer(args.tokenizer)
+    tokenizer = get_tokenizer(args.tokenizer, special_tokens=[])
     dataset = {split_type: get_triples_dataset(data[split_type], label_encoder, tokenizer) for split_type in data}
     dataset['train'].num_classes = len(label_encoder)
     train_hf_for_classification(dataset, tokenizer, args)
 
 
 def ontouml_classification(args):
+    create_run_config(args)
     for i, (seen_graphs, unseen_graphs, label_encoder) in enumerate(get_graphs_data_kfold(args)):
         print(len(seen_graphs), len(unseen_graphs), len(label_encoder))
         train_triples_seen = get_triples(seen_graphs, distance=args.distance, train=True)
@@ -49,12 +50,12 @@ def ontouml_classification(args):
         break
 
 
-if __name__ == '__main__':
-    args = parse_args()
-    args.stage = 'ontouml_cls'
-    config = create_run_config(args)
-    print(config)
+# if __name__ == '__main__':
+#     args = parse_args()
+#     args.stage = 'ontouml_cls'
+#     config = create_run_config(args)
+#     print(config)
 
-    ontouml_classification(args)
+#     ontouml_classification(args)
     
     

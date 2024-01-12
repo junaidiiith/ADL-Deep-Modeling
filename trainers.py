@@ -1,7 +1,4 @@
 import shutil
-from streamlit.runtime.uploaded_file_manager import UploadedFile
-from utils import save_temporary_uploaded_file
-import pickle
 import streamlit as st
 import pandas as pd
 from torch.utils.tensorboard import SummaryWriter
@@ -42,6 +39,39 @@ def compute_loss(pos_score, neg_score):
     return torch.nn.BCEWithLogitsLoss()(scores.float(), labels.float())
 
 
+
+def get_tokenizer(tokenizer_name, data=None, special_tokens=SPECIAL_TOKENS):
+    if data is None:
+        print("Creating pretrained LM tokenizer...")
+        tokenizer = get_pretrained_lm_tokenizer(tokenizer_name, special_tokens=special_tokens)
+        print("Done!")
+    else:
+        print("Creating word tokenizer...")
+        tokenizer = get_word_tokenizer_tokenizer(data)
+        print("Done!")
+    
+    return tokenizer
+
+
+
+def get_hf_classification_model(model_name, num_labels, tokenizer):
+    """
+        Get the hugging face classification model
+    """
+    if 'gpt2' in model_name:
+        model_config = GPT2Config.from_pretrained(pretrained_model_name_or_path=model_name, num_labels=num_labels)
+        tokenizer.padding_side = "left"
+        model = GPT2ForSequenceClassification.from_pretrained(pretrained_model_name_or_path=model_name, config=model_config)
+        model.resize_token_embeddings(len(tokenizer)) 
+        model.config.pad_token_id = model.config.eos_token_id
+    else:
+        model = AutoModelForSequenceClassification.from_pretrained(
+            pretrained_model_name_or_path=model_name, num_labels=num_labels, ignore_mismatched_sizes=True)
+        model.resize_token_embeddings(len(tokenizer))
+        
+    return model
+
+
 class UMLGPTTrainer:
     """
         Trainer class for UMLGPT
@@ -65,18 +95,20 @@ class UMLGPTTrainer:
         self.logs_dir = args.log_dir
         self.results_dir = args.results_dir
         self.compute_metrics_fn = compute_metrics_fn
-        self.results = pd.DataFrame(columns=[])
-        self.results_placeholders = dict()
+        self.results = list()
+        self.results_container = st.empty()
+        
     
     def train(self, epochs):
         self.model.train()
                     
         for epoch in stqdm(range(epochs), desc='Training GPT'):
             best_test_loss = float('inf')
-            epoch_metrics = {'loss': 0}
+            loss_label = f'{TRAIN_LABEL}_Loss'
+            epoch_metrics = {EPOCH: int(f'{epoch+1}'), loss_label: 0}
             for i, batch in stqdm(enumerate(self.dataloaders[TRAIN_LABEL]), desc=f'Epoch {epoch + 1}', total=len(self.dataloaders[TRAIN_LABEL])):
                 loss, logits, labels = self.step(batch)
-                epoch_metrics['loss'] += loss.item()
+                epoch_metrics[loss_label] += loss.item()
 
                 if self.compute_metrics_fn is not None:
                     metrics = self.compute_metrics_fn(logits, labels)
@@ -95,7 +127,9 @@ class UMLGPTTrainer:
                 self.optimizer.zero_grad()
 
                 if i % 100 == 0:
-                    print(f'Epoch {epoch} Batch {i} Avg Loss: {epoch_metrics["loss"] / (i + 1)}')
+                    print(f'Epoch {epoch} Batch {i} Avg Loss: {epoch_metrics[loss_label] / (i + 1)}')
+
+                break
 
             self.scheduler.step()
             for metric in epoch_metrics:
@@ -103,15 +137,22 @@ class UMLGPTTrainer:
             
             self.write_metrics(epoch_metrics, epoch, TRAIN_LABEL)
 
-            test_loss = self.evaluate(epoch, TEST_LABEL)
-            self.evaluate(epoch, UNSEEN_LABEL)
-
+            test_metrics = self.evaluate(epoch, TEST_LABEL)
+            unseen_metrics = self.evaluate(epoch, UNSEEN_LABEL)
+            
+            test_loss = test_metrics[f'{TEST_LABEL}_Loss']
             if test_loss < best_test_loss:
                 best_test_loss = test_loss
                 self.save_model(f'best_model.pt')
                 print(f'Best model saved at epoch {epoch}')
-                with st.empty():
-                    st.write(f'Best model saved at location: {os.path.join(self.models_dir, "best_model.pt")}')
+                # with st.empty():
+                #     st.write(f'Best model saved at location: {os.path.join(self.models_dir, "best_model.pt")}')
+            
+            self.results.append({**epoch_metrics, **test_metrics, **unseen_metrics})
+            with self.results_container.container():
+                st.subheader(f"## Results")
+                st.dataframe(pd.DataFrame(self.results))
+            
 
                 
     def evaluate(self, epoch, split_type=TEST_LABEL):
@@ -124,7 +165,8 @@ class UMLGPTTrainer:
                     The split type to evaluate on
         """
         self.model.eval()
-        eval_metrics = {'loss': 0}
+        loss_label = f'{split_type}_Loss'
+        eval_metrics = {loss_label: 0}
         for batch in stqdm(self.dataloaders[split_type], desc=f'Evaluation'):
             loss, logits, labels = self.step(batch)
 
@@ -135,7 +177,7 @@ class UMLGPTTrainer:
                         eval_metrics[metric] = 0
                     eval_metrics[metric] += metrics[metric]
 
-            eval_metrics['loss'] += loss.item()
+            eval_metrics[loss_label] += loss.item()
 
         # print("EVM:", eval_metrics)
         for metric in eval_metrics:
@@ -143,7 +185,7 @@ class UMLGPTTrainer:
         # print("EVM:", eval_metrics)
 
         self.write_metrics(eval_metrics, epoch, split_type)
-        return eval_metrics['loss']
+        return eval_metrics
     
 
     def step(self, batch):
@@ -181,26 +223,7 @@ class UMLGPTTrainer:
             for metric in metrics:
                 f.write(f'{metric}: {metrics[metric]:.3f} ')
             f.write('\n')
-        
-        print(f"{split_type}: {metrics}")
-        metrics[EPOCH] = epoch
-        metrics[SPLIT_TYPE] = split_type
-        if len(self.results.columns) == 0:
-            self.results = pd.DataFrame(columns=metrics.keys())
-        
-        self.results.loc[len(self.results)] = metrics
-
-        metric_names = [metric for metric in metrics if metric not in [EPOCH, SPLIT_TYPE]]
-
-        for metric in metric_names:
-            split_type_rows = self.results[self.results[SPLIT_TYPE] == split_type]
-            print(split_type_rows.head())
-            if (metric, split_type) not in self.results_placeholders:
-                self.results_placeholders[(metric, split_type)] = st.empty()
-
-            with self.results_placeholders[(metric, split_type)].container():
-                st.subheader(f"## {split_type} {metric}")
-                st.line_chart(split_type_rows, x=EPOCH, y=f"{metric}")
+                
             
 
 class GNNLinkPredictionTrainer:
@@ -225,13 +248,12 @@ class GNNLinkPredictionTrainer:
         
         self.edge2index = lambda g: torch.stack(list(g.edges())).contiguous()
         self.args = args
-        self.results = pd.DataFrame(columns=[
-            EPOCH, TRAIN_LOSS, TRAIN_ACC, TEST_LOSS, TEST_ACC
-        ])
-        self.results_placeholders = {
-            metric: st.empty() for metric in self.results.columns
-            if metric not in [EPOCH]
-        }
+        self.results = list()
+        self.st_results = st.empty()
+        # self.results_placeholders = {
+        #     metric: st.empty() for metric in self.results.columns
+        #     if metric not in [EPOCH]
+        # }
 
         print("GNN Trainer initialized.")
 
@@ -304,7 +326,7 @@ class GNNLinkPredictionTrainer:
 
 
     def run_epochs(self, dataloader, num_epochs):
-        max_val_acc, max_train_acc = 0, 0
+        max_val_acc = 0
         outputs = list()
         for epoch in stqdm(range(num_epochs), desc="Running Epochs"):
         # for epoch in range(num_epochs):
@@ -323,24 +345,20 @@ class GNNLinkPredictionTrainer:
 
             if test_acc > max_val_acc:
                 max_val_acc = test_acc
-                max_train_acc = train_acc
-                outputs.append({
-                    EPOCH: epoch,
-                    TRAIN_LOSS: train_loss,
-                    TEST_LOSS: test_loss,
-                    TEST_ACC: test_acc
-                })
                 self.save_model(f'best_model.pt')
             
             # self.scheduler.step()
             self.write_results(outputs)
-            self.results.loc[len(self.results)] = [epoch, train_loss, train_acc, test_loss, test_acc]
+            self.results.append({EPOCH: epoch, TRAIN_LOSS: train_loss, TEST_LOSS: test_loss, TEST_ACC: test_acc})
 
-            print(self.results)
-            for metric in self.results_placeholders:
-                with self.results_placeholders[metric].container():
-                    st.subheader(f"## {metric}")
-                    st.line_chart(self.results, x=EPOCH, y=f"{metric}")
+            with self.st_results.container():
+                st.subheader(f"## Results")
+                st.dataframe(pd.DataFrame(self.results))
+
+            # for metric in self.results_placeholders:
+            #     with self.results_placeholders[metric].container():
+            #         st.subheader(f"## {metric}")
+            #         st.line_chart(self.results, x=EPOCH, y=f"{metric}")
 
         
         print(f"Accuracy: {max_val_acc}")
@@ -385,14 +403,51 @@ def get_uml_gpt(vocab_size, args):
 
     uml_gpt = UMLGPT(vocab_size, embed_dim, block_size, n_layer, n_head)
     if args.from_pretrained is not None:
-        if args.from_pretrained.endswith('.pth') or args.from_pretrained.endswith('.pt'):
-            args.from_pretrained = torch.load(args.from_pretrained)
-
         uml_gpt = UMLGPT.from_pretrained(args.from_pretrained)
         print(f'Loaded pretrained model from {args.from_pretrained}')
     
     uml_gpt.to(device)
     return uml_gpt
+
+
+
+def train_umlgpt(dataset, args):
+    """
+        Train the UMLGPT model
+        Args:
+            dataset: dict
+                The dataset dictionary
+            args: Namespace
+                The arguments
+    """
+    if args.tokenizer != 'word':
+        tokenizer = get_tokenizer(args.tokenizer)
+    else:
+        tokenizer = get_tokenizer(WORD_TOKENIZER, dataset)
+        tokenizer.save_pretrained(args.models_dir)
+        print(f"Saved tokenizer at {args.models_dir}")
+
+    print("Tokenize dataset...")
+    tokenized_dataset = get_generative_uml_dataset(dataset, tokenizer)
+    print("Done!")
+
+    uml_gpt = get_uml_gpt(len(tokenizer), args)
+
+    print("Model initialized! with parameters:")
+    print(uml_gpt)
+
+    print("Creating dataloaders and trainer...")
+    trainer = UMLGPTTrainer(uml_gpt, get_dataloaders(tokenized_dataset, args.batch_size), args)
+    print("Done!")
+
+    print("Training...")
+    trainer.train(args.num_epochs)
+    trainer.save_model(f'final_model.pt')
+
+    ## Create zipfile for args.models_dir
+    # print("Creating zip file...")
+    # with st.spinner("Saving best model..."):
+    #     shutil.make_archive(args.models_dir, 'zip', args.models_dir)
 
 
 def train_hugging_face_gpt(data, args):
@@ -451,92 +506,43 @@ def train_hugging_face_gpt(data, args):
         train_dataset=dataset[TRAIN_LABEL],         # training dataset
         eval_dataset=dataset[TEST_LABEL],          # evaluation dataset
         data_collator=data_collator,
+        tokenizer=tokenizer,
     )
 
     suppress_neptune(trainer)
+    st_results = st.empty()
+    results = list()
+    best_loss = float('inf')
+    for epoch in stqdm(range(args.num_epochs), desc="Training Epoch: "):
+        # trainer.train()
+        # print("Evaluating on test set...")
+        # test_results = trainer.evaluate(dataset[TEST_LABEL])
+        # print(test_results)
 
-    trainer.train()
+        # print("Evaluating on unseen set...")
+        # unseen_results = trainer.evaluate(dataset[UNSEEN_LABEL])
+        # print(unseen_results)
 
-    print('Evaluating on test set...')
-    results[TEST_LABEL] = trainer.evaluate(dataset[TEST_LABEL])
-
-    print('Evaluating on unseen set...')
-    results[UNSEEN_LABEL] = trainer.evaluate(dataset[UNSEEN_LABEL])
-
-    model_dir = os.path.join(args.models_dir, f'{args.config_file_name}')
-    trainer.save_model(model_dir)
-    print("Saving at...", model_dir)
-    shutil.make_archive(model_dir, 'zip', args.models_dir)
-    print('Done!')
-
-
-def get_tokenizer(tokenizer_name, data=None):
-    if data is None:
-        print("Creating pretrained LM tokenizer...")
-        tokenizer = get_pretrained_lm_tokenizer(tokenizer_name)
-        print("Done!")
-    else:
-        print("Creating word tokenizer...")
-        tokenizer = get_word_tokenizer_tokenizer(data)
-        print("Done!")
-    
-    return tokenizer
-
-
-def train_umlgpt(dataset, args):
-    """
-        Train the UMLGPT model
-        Args:
-            dataset: dict
-                The dataset dictionary
-            args: Namespace
-                The arguments
-    """
-    if args.tokenizer != 'word':
-        tokenizer = get_tokenizer(args.tokenizer)
-    else:
-        tokenizer = get_tokenizer('word', dataset)
-        tokenizer.save_pretrained(args.models_dir)
-        print(f"Saved tokenizer at {args.models_dir}")
-
-    print("Tokenize dataset...")
-    tokenized_dataset = get_generative_uml_dataset(dataset, tokenizer)
-    print("Done!")
-
-    uml_gpt = get_uml_gpt(len(tokenizer), args)
-
-    print("Model initialized! with parameters:")
-    print(uml_gpt)
-
-    print("Creating dataloaders and trainer...")
-    trainer = UMLGPTTrainer(uml_gpt, get_dataloaders(tokenized_dataset, args.batch_size), args)
-    print("Done!")
-
-    print("Training...")
-    trainer.train(args.num_epochs)
-    trainer.save_model(f'final_model.pt')
-
-    ## Create zipfile for args.models_dir
-    # print("Creating zip file...")
-    shutil.make_archive(args.models_dir, 'zip', args.models_dir)
-
-
-def get_hf_classification_model(model_name, num_labels, tokenizer):
-    """
-        Get the hugging face classification model
-    """
-    if 'gpt2' in model_name:
-        model_config = GPT2Config.from_pretrained(pretrained_model_name_or_path=model_name, num_labels=num_labels)
-        tokenizer.padding_side = "left"
-        model = GPT2ForSequenceClassification.from_pretrained(pretrained_model_name_or_path=model_name, config=model_config)
-        model.resize_token_embeddings(len(tokenizer)) 
-        model.config.pad_token_id = model.config.eos_token_id
-    else:
-        model = AutoModelForSequenceClassification.from_pretrained(
-            pretrained_model_name_or_path=model_name, num_labels=num_labels, ignore_mismatched_sizes=True)
-        model.resize_token_embeddings(len(tokenizer))
+        test_results = {'eval_loss': 0, 'eval_accuracy': 0}
+        unseen_results = {'eval_loss': 0, 'eval_accuracy': 0}
         
-    return model
+        if test_results['eval_loss'] < best_loss:
+            best_loss = test_results['eval_loss']
+            with st.spinner("Saving best model..."):
+                trainer.save_model(args.models_dir)
+        
+        
+        test_results = {f"test_{k}": v for k, v in test_results.items()}
+        unseen_results = {f"unseen_{k}": v for k, v in unseen_results.items()}
+        results.append({**{'Epoch': epoch}, **test_results, **unseen_results})
+
+        with st_results.container():
+            st.markdown(f"### {epoch+1} Results")
+            st.dataframe(pd.DataFrame(results), hide_index=True)
+    
+    with st_results.container():
+        st.markdown(f"## Pretraining Results")
+        st.dataframe(pd.DataFrame(results), hide_index=True)
 
 
 def train_hf_for_classification(dataset, tokenizer, args):
@@ -571,7 +577,7 @@ def train_hf_for_classification(dataset, tokenizer, args):
         per_device_eval_batch_size=batch_size,
         # fp16=True,
         logging_steps=logging_steps,
-        num_train_epochs=args.num_epochs,
+        num_train_epochs=1,
         save_total_limit=2,
         load_best_model_at_end=True,
     )
@@ -588,18 +594,36 @@ def train_hf_for_classification(dataset, tokenizer, args):
         if isinstance(cb, transformers.integrations.NeptuneCallback):
             trainer.callback_handler.remove_callback(cb)
 
-    # trainer.train()
-    # print("Evaluating on test set...")
-    # test_results = trainer.evaluate(test)
-    # print(test_results)
+    best_loss = float('inf')
+    results = list()
+    st_results = st.empty()
+    for epoch in stqdm(range(args.num_epochs), desc="Training Epoch: "):
+        # trainer.train()
+        # print("Evaluating on test set...")
+        # test_results = trainer.evaluate(test)
+        # print(test_results)
 
-    # print("Evaluating on unseen set...")
-    # unseen_results = trainer.evaluate(unseen)
-    # print(unseen_results)
+        # print("Evaluating on unseen set...")
+        # unseen_results = trainer.evaluate(unseen)
+        # print(unseen_results)
 
-    model_dir = os.path.join(args.models_dir, f'{args.config_file_name}')
-    trainer.save_model(model_dir)
+        test_results = {'eval_loss': 0, 'accuracy': 0}
+        unseen_results = {'eval_loss': 0, 'accuracy': 0}
 
-    shutil.make_archive(model_dir, 'zip', args.models_dir)
+        if test_results['eval_loss'] < best_loss:
+            best_loss = test_results['eval_loss']
+            with st.spinner("Saving best model ..."):
+                trainer.save_model(args.models_dir)
+            
+        
+        test_results = {f"test_{k}": v for k, v in test_results.items()}
+        unseen_results = {f"unseen_{k}": v for k, v in unseen_results.items()}
+        results.append({**{'Epoch': epoch}, **test_results, **unseen_results})
 
-    print("Done!")
+        with st_results.container():
+            st.markdown(f"### Epoch {epoch+1} Results")
+            st.dataframe(pd.DataFrame(results), hide_index=True)
+    
+    with st_results.container():
+        st.markdown(f"### HF Classification {epoch+1} Results")
+        st.dataframe(pd.DataFrame(results), hide_index=True)

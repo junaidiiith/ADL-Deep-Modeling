@@ -421,6 +421,19 @@ def get_kfold_lp_data(data, seed=42, test_size=0.1):
         yield data
 
 
+def get_tokenization(tokenizer, data):
+    """
+    ``get_tokenization`` function returns the tokenization for the given tokenizer and data
+    """
+    if isinstance(tokenizer, VocabTokenizer):
+        tokenized_data = tokenizer.batch_encode(
+            data, return_tensors='pt', max_length='percentile')
+    else:
+        tokenized_data = tokenizer(
+            data, return_tensors='pt', padding=True)
+    return tokenized_data
+
+
 def get_embedding(model, encodings, pooling='last'):
     """
     ``get_embedding`` function returns the embeddings for the given model and encodings
@@ -739,7 +752,7 @@ class LinkPredictionDataset(DGLDataset):
         }
         """
         node_strs = [promptize_node(g, n) for n in g.nodes()]
-        node_encodings = self.tokenizer.batch_encode(node_strs, return_tensors='pt', max_length='percentile')
+        node_encodings = get_tokenization(self.tokenizer, node_strs)
         node_embeddings = get_embedding(self.model, node_encodings)
         pos_neg_graphs = get_pos_neg_graphs(g, self.test_size)        
         

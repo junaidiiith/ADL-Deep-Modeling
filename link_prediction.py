@@ -1,5 +1,4 @@
 import pickle
-from utils import get_uploaded_file_name
 from graph_utils import get_graph_data
 from data_generation_utils import get_kfold_lp_data
 from utils import create_run_config
@@ -42,16 +41,16 @@ def import_model(args):
         If the model is uml-gpt, then the pretrained model is loaded from the path provided in args
         If the model is not uml-gpt, then the model is loaded from the huggingface transformers library
     """
+    
     try:
-        if args.gpt_model == UMLGPTMODEL:
+        if args.embedding_model == UMLGPTMODEL:
             assert args.from_pretrained, "Pretrained model path is required for link prediction to get node embeddings"
+            print("Loading UML-GPT model from:", args.from_pretrained)
             return UMLGPT.from_pretrained(args.from_pretrained)
         
         else:
-            if args.from_pretrained:
-                return AutoModel.from_pretrained(args.from_pretrained)
-            else:
-                AutoModel.from_pretrained(args.gpt_model)
+            print("Loading model from:", args.embedding_model)
+            return AutoModel.from_pretrained(args.embedding_model)
 
     except Exception as e:
         print(e)
@@ -70,12 +69,13 @@ def train_link_prediction(graphs, args):
         The predictor model is used to predict the link between two nodes
     """
     language_model = import_model(args)
-    if args.tokenizer_file.endswith('.pkl'):
+    if 'tokenizer_file' in args and args.tokenizer_file.endswith('.pkl'):
         tokenizer = pickle.load(open(args.tokenizer_file, 'rb'))
     else:
         tokenizer = get_tokenizer(args.tokenizer)
 
-    input_dim = language_model.token_embedding_table.weight.data.shape[1] if args.gpt_model == UMLGPTMODEL else language_model.config.hidden_size
+    
+    input_dim = language_model.token_embedding_table.weight.data.shape[1] if args.embedding_model == UMLGPTMODEL else language_model.config.hidden_size
     gnn_model = GNNModel(
         model_name='SAGEConv', 
         input_dim=input_dim, 
@@ -97,7 +97,7 @@ def train_link_prediction(graphs, args):
         # with st.empty():
         #     st.write(f"Training Link Prediction on {split_type} graphs")
 
-        dataset_prefix = f"{split_type}_ip={input_dim}_tok={get_uploaded_file_name(tokenizer)}"
+        dataset_prefix = f"{split_type}_ip={input_dim}_tok={tokenizer}"
         dataset = LinkPredictionDataset(
             graphs=graphs[split_type], 
             tokenizer=tokenizer, 

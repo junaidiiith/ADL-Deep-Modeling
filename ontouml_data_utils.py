@@ -1,3 +1,4 @@
+from streamlit.runtime.uploaded_file_manager import UploadedFile
 import random
 from collections import defaultdict
 import fnmatch
@@ -157,29 +158,24 @@ def get_nxg_from_ontouml_map(ontouml_id2obj_map, f_name='out.txt', directed=True
     return g
 
 
-def get_all_files(zip_file_name):
+def get_all_files(zip_file):
     """
         Unzip data_dir zip files and get all the JSON files
     """
 
-    with ZipFile(zip_file_name, 'r') as zip:
+    with ZipFile(zip_file, 'r') as zip:
         zip.extractall()
         all_files = list()
-        for root, _, files in os.walk('./'):
+        for root, _, files in os.walk(zip_file.name.split('.')[0]):
             for file in files:
                 all_files.append(os.path.join(root, file))
-    
-    if isinstance(zip_file_name, str):
-        shutil.rmtree(zip_file_name.split(os.sep)[-1].split(".")[0])
-    else:
-        shutil.rmtree(zip_file_name.name.split(os.sep)[-1].split(".")[0])
-                
+        
     return all_files
 
 
 def get_ontouml_to_nx(data_dir, min_stereotypes=10):
     ontouml_graphs = list()
-    if data_dir.name.endswith(".zip"):
+    if isinstance(data_dir, UploadedFile):
         models = get_all_files(data_dir)
     else:
         models = find_files_with_extension(data_dir, "json")
@@ -194,6 +190,10 @@ def get_ontouml_to_nx(data_dir, min_stereotypes=10):
             if len(stereotype_nodes) >= min_stereotypes:
                 ontouml_graphs.append((g, mfp))
     
+    if isinstance(data_dir, UploadedFile):
+        shutil.rmtree(data_dir.name.split(os.sep)[-1].split(".")[0])
+    else:
+        shutil.rmtree(data_dir.split(os.sep)[-1].split(".")[0])
     return ontouml_graphs
 
 
