@@ -37,7 +37,7 @@ def process_uml_gpt_dir(uml_plm_dir):
     args.tokenizer = WORD_TOKENIZER if tokenizer.endswith('.pkl') else tokenizer
     
 
-PAGE_TITLE = "UML Link Prediction"
+PAGE_TITLE = "## UML Link Prediction"
 
 args = parse_args()
 st.set_page_config(page_title=PAGE_TITLE, page_icon="🧩")
