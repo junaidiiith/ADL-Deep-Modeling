@@ -346,7 +346,7 @@ def get_pos_neg_graphs(nxg, tr=0.2):
     return graphs
 
 
-def get_kfold_lm_data(data, seed=42, test_size=0.1):
+def get_kfold_lm_data(data, seed=42, test_size=0.1, phase=TRAINING_PHASE):
     """
     ``get_kfold_lm_data`` function returns a generator of k-fold data for the generative task
     seen_graph_triples are the all the triples from the graphs that are considered available for training a language model
@@ -371,17 +371,22 @@ def get_kfold_lm_data(data, seed=42, test_size=0.1):
         
         print("Train graph triples: ", len(seen_train), "Test graph triples: ", len(seen_test), "Unseen graph triples: ", len(unseen_graph_triples))
 
-        data = {
-            'train': seen_train,
-            'test': seen_test,
-            'unseen': unseen_graph_triples,
-        }
+        if phase == TRAINING_PHASE:
+            data = {
+                TRAIN_LABEL: seen_train,
+                TEST_LABEL: seen_test,
+                UNSEEN_LABEL: unseen_graph_triples,
+            }
+        else:
+            data = {
+                TEST_LABEL: seen_test + unseen_graph_triples
+            }
         
         i += 1
         yield data
 
 
-def get_kfold_lp_data(data, seed=42, test_size=0.1):
+def get_kfold_lp_data(data, seed=42, test_size=0.1, phase='train'):
     """
     ``get_kfold_lp_data`` function returns a generator of k-fold data for the link prediction task
     seen_graphs are the all the graphs that are considered available for training a link prediction model
@@ -409,11 +414,16 @@ def get_kfold_lp_data(data, seed=42, test_size=0.1):
         # train, test = train_test_split(node_triples, test_size=test_size, random_state=seed)
         print("Train graphs: ", len(seen_train), "Test graphs: ", len(seen_test), "Unseen graphs: ", len(unseen_graphs))
 
-        data = {
-            'train': seen_train,
-            'test': seen_test,
-            'unseen': unseen_graphs,
-        }
+        if phase == TRAINING_PHASE:
+            data = {
+                TRAIN_LABEL: seen_train,
+                TEST_LABEL: seen_test,
+                UNSEEN_LABEL: unseen_graphs,
+            }
+        else:
+            data = {
+                TEST_LABEL: seen_test + unseen_graphs
+            }
         
         i += 1
         yield data

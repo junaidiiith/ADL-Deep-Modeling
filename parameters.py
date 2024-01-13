@@ -67,6 +67,7 @@ def parse_args():
     parser.add_argument("--models_dir", type=str, default="models")
 
     parser.add_argument("--class_type", type=str)
+    parser.add_argument("--phase", type=str)
 
 
     parser.add_argument("--gpt_model", type=str)

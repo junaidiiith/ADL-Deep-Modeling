@@ -10,7 +10,7 @@ from trainers import UMLGPTTrainer
 from utils import get_recommendation_metrics
 from trainers import get_tokenizer
 from trainers import train_hf_for_classification
-from constants import UMLGPTMODEL, WORD_TOKENIZER, TOKENIZER_FILE
+from constants import TRAINING_PHASE, UMLGPTMODEL, WORD_TOKENIZER, TOKENIZER_FILE
 
 from utils import create_run_config
 
@@ -47,7 +47,10 @@ def train_uml_gpt_classification(data, label_encoder, compute_metrics_fn, args):
     dataset = get_classification_dataset(data, tokenizer, label_encoder, args.class_type)
     uml_gpt_classifier = UMLGPTClassifier(model, len(label_encoder))
     uml_gpt_trainer = UMLGPTTrainer(uml_gpt_classifier, get_dataloaders(dataset), args, compute_metrics_fn=compute_metrics_fn)
-    uml_gpt_trainer.train(args.num_epochs)
+    if args.phase == TRAINING_PHASE:
+        uml_gpt_trainer.train(args.num_epochs)
+    else:
+        uml_gpt_trainer.evaluate()
 
 
 def pretrained_lm_sequence_classification(data, label_encoder, args):

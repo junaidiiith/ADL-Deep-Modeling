@@ -129,7 +129,7 @@ def main(args):
     """
     create_run_config(args)
     graph_data = get_graph_data(args.graphs_file)
-    for i, graphs in enumerate(get_kfold_lp_data(graph_data)):
+    for i, graphs in enumerate(get_kfold_lp_data(graph_data, phase=args.phase)):
         break
     
     train_link_prediction(graphs, args)

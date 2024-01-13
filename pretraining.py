@@ -1,5 +1,3 @@
-from streamlit.runtime.uploaded_file_manager import UploadedFile
-import os
 from parameters import parse_args
 from graph_utils import get_graph_data
 from trainers import train_umlgpt, train_hugging_face_gpt
@@ -18,14 +16,14 @@ def main(args):
     # print("Loading graph data from:", args.graphs_file)
 
     graph_data = get_graph_data(args.graphs_file)
-    for _, data in enumerate(get_kfold_lm_data(graph_data, seed=args.seed)):
+    for _, data in enumerate(get_kfold_lm_data(graph_data, seed=args.seed, phase=args.phase)):
         break
     
     print("Creating dataset...")
     dataset = get_promptized_data_for_generation(data)
 
-    print("Initializing...")
-
+    print("Initializing...", dataset.keys())
+    # print(dataset['test'][0])
     if args.gpt_model == UMLGPTMODEL:
         train_umlgpt(dataset, args)
     else:

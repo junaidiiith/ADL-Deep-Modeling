@@ -71,39 +71,61 @@ CLASSIFICATION_TYPE = 'class_type'
 FROM_PRETRAINED = 'from_pretrained'
 TOKENIZER_LABEL = 'tokenizer'
 
+CUSTOM_WORD_TOKENIZER = 'Custom Word Tokenizer'
+
+BERT_BASE_CASED_LABEL = 'BERT Base Cased'
+BERT_BASE_UNCASED_LABEL = 'BERT Base UnCased'
+GPT2_LABEL = 'GPT2'
+UMLGPT_LABEL = 'UMLGPT'
+CONV_BERT_LABEL = 'Convolution BERT'
+DISTILLED_BERT_LABEL = 'Distilled BERT'
+
+
 uml_plm_names = {
-    'BERT Cased': 'bert-base-cased',
-    'BERT Uncased': 'bert-base-uncased',
-    'GPT2': 'gpt2',
-    'UMLGPT': UMLGPTMODEL,
+    BERT_BASE_CASED_LABEL: 'bert-base-cased',
+    BERT_BASE_UNCASED_LABEL: 'bert-base-uncased',
+    GPT2_LABEL: 'gpt2',
+    UMLGPT_LABEL: UMLGPTMODEL,
 }
 
 tokenizer_names = {
-    'Custom Word Tokenizer': 'word',
-    'BERT Cased': 'bert-base-cased',
-    'BERT Uncased': 'bert-base-uncased',
-    'GPT2': 'gpt2',
+    CUSTOM_WORD_TOKENIZER: 'word',
+    BERT_BASE_CASED_LABEL: 'bert-base-cased',
+    BERT_BASE_UNCASED_LABEL: 'bert-base-uncased',
+    GPT2_LABEL: 'gpt2',
 }
 
 stereotype_classification_model_names = {
-    'BERT Cased': 'bert-base-cased',
-    'BERT Uncased': 'bert-base-uncased',
-    'GPT2': 'gpt2',
-    'Conv-BERT': 'YituTech/conv-bert-base',
-    'Distilled BERT': 'distilbert-base-uncased-finetuned-sst-2-english'
+    BERT_BASE_CASED_LABEL: 'bert-base-cased',
+    BERT_BASE_UNCASED_LABEL: 'bert-base-uncased',
+    GPT2_LABEL: 'gpt2',
+    CONV_BERT_LABEL: 'YituTech/conv-bert-base',
+    DISTILLED_BERT_LABEL: 'distilbert-base-uncased-finetuned-sst-2-english'
 }
 
 gpt_model_names = {
-    'GPT2': 'gpt2',
+    GPT2_LABEL: 'gpt2',
     'UMLGPT': UMLGPTMODEL,
 }
 
 
 all_plms = {
-    'UMLGPT': UMLGPTMODEL,
-    'BERT Cased': 'bert-base-cased',
-    'BERT Uncased': 'bert-base-uncased',
-    'GPT2': 'gpt2',
-    'Conv-BERT': 'YituTech/conv-bert-base',
-    'Distilled BERT': 'distilbert-base-uncased-finetuned-sst-2-english'
+    UMLGPT_LABEL: UMLGPTMODEL,
+    BERT_BASE_CASED_LABEL: 'bert-base-cased',
+    BERT_BASE_UNCASED_LABEL: 'bert-base-uncased',
+    GPT2_LABEL: 'gpt2',
+    CONV_BERT_LABEL: 'YituTech/conv-bert-base',
+    DISTILLED_BERT_LABEL: 'distilbert-base-uncased-finetuned-sst-2-english'
+}
+
+
+TRAINING_PHASE = 'training'
+TRAINING_PHASE_LABEL = 'Train Model'
+
+INFERENCE_PHASE = 'inference'
+INFERENCE_PHASE_LABEL = 'Run Inference'
+
+phase_mapping = {
+    TRAINING_PHASE_LABEL: TRAINING_PHASE,
+    INFERENCE_PHASE_LABEL: INFERENCE_PHASE
 }

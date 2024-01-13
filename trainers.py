@@ -1,3 +1,4 @@
+import pickle
 import streamlit as st
 import pandas as pd
 from torch.utils.tensorboard import SummaryWriter
@@ -78,18 +79,22 @@ class UMLGPTTrainer:
         This function is used to compute the metrics for the task
     """
     def __init__(self, model, dataloaders, args, compute_metrics_fn=None):
+        self.args = args
+        self.dataloaders = dataloaders
         self.model = model
         self.model.to(DEVICE)
-        self.lr = args.lr
-        self.batch_size = args.batch_size
-        self.dataloaders = dataloaders
-        self.args = args
-        self.optimizer = torch.optim.AdamW(self.model.parameters(), lr=self.lr)
+        if args.phase == TRAINING_PHASE:
+            self.lr = args.lr
+            self.batch_size = args.batch_size
+            self.optimizer = torch.optim.AdamW(self.model.parameters(), lr=self.lr)
+            self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(self.optimizer, T_max=args.num_epochs)
+        
         self.criterion = nn.CrossEntropyLoss(ignore_index=-100)
-        self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(self.optimizer, T_max=args.num_epochs)
+    
         self.writer = SummaryWriter(log_dir=args.log_dir)
         self.models_dir = args.models_dir
         self.logs_dir = args.log_dir
+
         self.compute_metrics_fn = compute_metrics_fn
         self.results = list()
         self.results_container = st.empty()
@@ -133,8 +138,11 @@ class UMLGPTTrainer:
             
             self.write_metrics(epoch_metrics, epoch, TRAIN_LABEL)
 
-            test_metrics = self.evaluate(epoch, TEST_LABEL)
-            unseen_metrics = self.evaluate(epoch, UNSEEN_LABEL)
+            test_metrics = self.evaluate()
+            self.write_metrics(test_metrics, epoch, TEST_LABEL)
+
+            unseen_metrics = self.evaluate(UNSEEN_LABEL)
+            self.write_metrics(unseen_metrics, epoch, UNSEEN_LABEL)
             
             test_loss = test_metrics[f'{TEST_LABEL}_Loss']
             if test_loss < best_test_loss:
@@ -151,7 +159,7 @@ class UMLGPTTrainer:
             
 
                 
-    def evaluate(self, epoch, split_type=TEST_LABEL):
+    def evaluate(self, split_type=TEST_LABEL):
         """
             Evaluate the model on the test set
             Args:
@@ -180,7 +188,6 @@ class UMLGPTTrainer:
             eval_metrics[metric] /= len(self.dataloaders[split_type])
         # print("EVM:", eval_metrics)
 
-        self.write_metrics(eval_metrics, epoch, split_type)
         return eval_metrics
     
 
@@ -188,6 +195,7 @@ class UMLGPTTrainer:
         input_ids = batch['input_ids'].to(DEVICE)
         attention_mask = batch['attention_mask'].to(DEVICE)
         labels = batch['labels'].to(DEVICE)
+
         logits = self.model(input_ids, attention_mask)
         loss = self.model.get_loss(logits, labels)
         return loss, logits, labels
@@ -406,34 +414,39 @@ def train_umlgpt(dataset, args):
             args: Namespace
                 The arguments
     """
-    if args.tokenizer != WORD_TOKENIZER:
-        tokenizer = get_tokenizer(args.tokenizer)
-    else:
+    if args.tokenizer_file is not None:
+        tokenizer = pickle.load(open(args.tokenizer_file, 'rb'))
+    
+    elif args.tokenizer == WORD_TOKENIZER:
         tokenizer = get_tokenizer(WORD_TOKENIZER, dataset)
         tokenizer.save_pretrained(args.models_dir)
         print(f"Saved tokenizer at {args.models_dir}")
+    
+    else:
+        tokenizer = get_tokenizer(args.tokenizer)
+
 
     print("Tokenize dataset...")
     tokenized_dataset = get_generative_uml_dataset(dataset, tokenizer)
     print("Done!")
 
+
     uml_gpt = get_uml_gpt(len(tokenizer), args)
 
     print("Model initialized! with parameters:")
-    print(uml_gpt)
+    print("Batch size: ", args.batch_size)
+    dataloaders = get_dataloaders(tokenized_dataset, args.batch_size)
 
     print("Creating dataloaders and trainer...")
-    trainer = UMLGPTTrainer(uml_gpt, get_dataloaders(tokenized_dataset, args.batch_size), args)
+    trainer = UMLGPTTrainer(uml_gpt, dataloaders, args)
     print("Done!")
-
-    print("Training...")
-    trainer.train(args.num_epochs)
-    trainer.save_model(f'final_model.pt')
-
-    ## Create zipfile for args.models_dir
-    # print("Creating zip file...")
-    # with st.spinner("Saving best model..."):
-    #     shutil.make_archive(args.models_dir, 'zip', args.models_dir)
+    if args.phase == TRAINING_PHASE:
+        print("Training...")
+        trainer.train(args.num_epochs)
+        trainer.save_model(f'final_model.pt')
+    else:
+        print("Evaluating: ", len(dataloaders[TEST_LABEL].dataset))
+        trainer.evaluate()
 
 
 def train_hugging_face_gpt(data, args):
@@ -487,45 +500,52 @@ def train_hugging_face_gpt(data, args):
     )
 
     trainer = Trainer(
-        model=model,                         # the instantiated Transformers model to be trained
-        args=training_args,                  # training arguments, defined above
-        train_dataset=dataset[TRAIN_LABEL],         # training dataset
+        model=model,                        
+        args=training_args,                 
+        train_dataset=dataset[TRAIN_LABEL] if args.phase == TRAINING_PHASE else None,
         eval_dataset=dataset[TEST_LABEL],          # evaluation dataset
         data_collator=data_collator,
         tokenizer=tokenizer,
     )
 
     suppress_neptune(trainer)
+
     st_results = st.empty()
     results = list()
-    best_loss = float('inf')
-    for epoch in stqdm(range(args.num_epochs), desc="Training Epoch: "):
-        # trainer.train()
-        # print("Evaluating on test set...")
-        # test_results = trainer.evaluate(dataset[TEST_LABEL])
-        # print(test_results)
+    if args.phase == TRAINING_PHASE:
+        best_loss = float('inf')
+        for epoch in stqdm(range(args.num_epochs), desc="Training Epoch: "):
+            # trainer.train()
+            # print("Evaluating on test set...")
+            # test_results = trainer.evaluate(dataset[TEST_LABEL])
+            # print(test_results)
 
-        # print("Evaluating on unseen set...")
-        # unseen_results = trainer.evaluate(dataset[UNSEEN_LABEL])
-        # print(unseen_results)
+            # print("Evaluating on unseen set...")
+            # unseen_results = trainer.evaluate(dataset[UNSEEN_LABEL])
+            # print(unseen_results)
 
+            test_results = {'eval_loss': 0, 'eval_accuracy': 0}
+            unseen_results = {'eval_loss': 0, 'eval_accuracy': 0}
+            
+            if test_results['eval_loss'] < best_loss:
+                best_loss = test_results['eval_loss']
+                with st.spinner("Saving best model..."):
+                    trainer.save_model(args.models_dir)
+            
+            
+            test_results = {f"test_{k}": v for k, v in test_results.items()}
+            unseen_results = {f"unseen_{k}": v for k, v in unseen_results.items()}
+            results.append({**{'Epoch': epoch}, **test_results, **unseen_results})
+
+            with st_results.container():
+                st.markdown(f"### {epoch+1} Results")
+                st.dataframe(pd.DataFrame(results), hide_index=True)
+        
+    else:
         test_results = {'eval_loss': 0, 'eval_accuracy': 0}
-        unseen_results = {'eval_loss': 0, 'eval_accuracy': 0}
-        
-        if test_results['eval_loss'] < best_loss:
-            best_loss = test_results['eval_loss']
-            with st.spinner("Saving best model..."):
-                trainer.save_model(args.models_dir)
-        
-        
-        test_results = {f"test_{k}": v for k, v in test_results.items()}
-        unseen_results = {f"unseen_{k}": v for k, v in unseen_results.items()}
-        results.append({**{'Epoch': epoch}, **test_results, **unseen_results})
+        # test_results = trainer.evaluate(dataset[TEST_LABEL])
+        results.append({**test_results, **unseen_results})
 
-        with st_results.container():
-            st.markdown(f"### {epoch+1} Results")
-            st.dataframe(pd.DataFrame(results), hide_index=True)
-    
     with st_results.container():
         st.markdown(f"## Pretraining Results")
         st.dataframe(pd.DataFrame(results), hide_index=True)
