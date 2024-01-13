@@ -1,4 +1,3 @@
-import shutil
 import streamlit as st
 import pandas as pd
 from torch.utils.tensorboard import SummaryWriter
@@ -25,8 +24,6 @@ from data_generation_utils import SPECIAL_TOKENS
 from constants import *
 
 
-device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-
 def suppress_neptune(trainer):
     for cb in trainer.callback_handler.callbacks:
         if isinstance(cb, NeptuneCallback):
@@ -34,8 +31,8 @@ def suppress_neptune(trainer):
 
 
 def compute_loss(pos_score, neg_score):
-    scores = torch.cat([pos_score, neg_score]).to(device)
-    labels = torch.cat([torch.ones(pos_score.shape[0]), torch.zeros(neg_score.shape[0])]).to(device)
+    scores = torch.cat([pos_score, neg_score]).to(DEVICE)
+    labels = torch.cat([torch.ones(pos_score.shape[0]), torch.zeros(neg_score.shape[0])]).to(DEVICE)
     return torch.nn.BCEWithLogitsLoss()(scores.float(), labels.float())
 
 
@@ -82,7 +79,7 @@ class UMLGPTTrainer:
     """
     def __init__(self, model, dataloaders, args, compute_metrics_fn=None):
         self.model = model
-        self.model.to(device)
+        self.model.to(DEVICE)
         self.lr = args.lr
         self.batch_size = args.batch_size
         self.dataloaders = dataloaders
@@ -93,7 +90,6 @@ class UMLGPTTrainer:
         self.writer = SummaryWriter(log_dir=args.log_dir)
         self.models_dir = args.models_dir
         self.logs_dir = args.log_dir
-        self.results_dir = args.results_dir
         self.compute_metrics_fn = compute_metrics_fn
         self.results = list()
         self.results_container = st.empty()
@@ -189,9 +185,9 @@ class UMLGPTTrainer:
     
 
     def step(self, batch):
-        input_ids = batch['input_ids'].to(device)
-        attention_mask = batch['attention_mask'].to(device)
-        labels = batch['labels'].to(device)
+        input_ids = batch['input_ids'].to(DEVICE)
+        attention_mask = batch['attention_mask'].to(DEVICE)
+        labels = batch['labels'].to(DEVICE)
         logits = self.model(input_ids, attention_mask)
         loss = self.model.get_loss(logits, labels)
         return loss, logits, labels
@@ -218,7 +214,7 @@ class UMLGPTTrainer:
             print(f'{metric}: {metrics[metric]:.3f}', end=' ')
         print()
 
-        with open(os.path.join(self.results_dir, 'results.txt'), 'a') as f:
+        with open(os.path.join(self.logs_dir, 'results.txt'), 'a') as f:
             f.write(f'Epoch {epoch} {split_type} metrics: ')
             for metric in metrics:
                 f.write(f'{metric}: {metrics[metric]:.3f} ')
@@ -235,14 +231,13 @@ class GNNLinkPredictionTrainer:
     def __init__(self, model, predictor, args) -> None:
         self.model = model
         self.predictor = predictor
-        self.model.to(device)
-        self.predictor.to(device)
+        self.model.to(DEVICE)
+        self.predictor.to(DEVICE)
         self.optimizer = torch.optim.Adam(itertools.chain(model.parameters(), predictor.parameters()), lr=args.lr)
         self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(self.optimizer, T_max=args.num_epochs)
 
         self.models_dir = args.models_dir
         self.logs_dir = args.log_dir
-        self.results_dir = args.results_dir
         self.writer = SummaryWriter(log_dir=args.log_dir)
 
         
@@ -312,15 +307,15 @@ class GNNLinkPredictionTrainer:
 
 
     def get_logits(self, g):
-        edge_index = self.edge2index(g).to(device)
-        x = g.ndata['h'].float().to(device)
+        edge_index = self.edge2index(g).to(DEVICE)
+        x = g.ndata['h'].float().to(DEVICE)
         h = self.model(x, edge_index)
         return h
     
 
     def get_prediction_score(self, g, h):
-        h = h.to(device)
-        edge_index = self.edge2index(g).to(device)
+        h = h.to(DEVICE)
+        edge_index = self.edge2index(g).to(DEVICE)
         prediction_score = self.predictor(h, edge_index)
         return prediction_score
 
@@ -353,22 +348,13 @@ class GNNLinkPredictionTrainer:
 
             with self.st_results.container():
                 st.subheader(f"## Results")
-                st.dataframe(pd.DataFrame(self.results))
+                st.dataframe(pd.DataFrame(self.results), hide_index=True)
 
-            # for metric in self.results_placeholders:
-            #     with self.results_placeholders[metric].container():
-            #         st.subheader(f"## {metric}")
-            #         st.line_chart(self.results, x=EPOCH, y=f"{metric}")
 
-        
         print(f"Accuracy: {max_val_acc}")
-        # print(f"Max Train Accuracy: {max_train_acc}")
-        max_output = max(outputs, key=lambda x: x[TEST_ACC])
-        st.write(f"Accuracy: {max_val_acc}")
-        # st.write(f"Max Train Accuracy: {max_train_acc}")
-
-        st.write(f'Best model saved at location: {os.path.join(self.models_dir, "best_model.pt")}')
-
+        df = pd.DataFrame(self.results)
+        max_output = dict(df.loc[df[TEST_ACC].idxmax(axis=0)])
+        
         return max_output
 
     def save_model(self, file_name):
@@ -380,11 +366,9 @@ class GNNLinkPredictionTrainer:
         # print(f'Saved model at {file_name}')
 
     def write_results(self, outputs):
-        with open(os.path.join(self.results_dir, 'results.txt'), 'a') as f:
+        with open(os.path.join(self.logs_dir, 'results.txt'), 'a') as f:
             for output in outputs:
                 f.write(f"Epoch {output[EPOCH]} Train Loss: {output[TRAIN_LOSS]} and Test Loss: {output[TEST_LOSS]} and Test Accuracy: {output[TEST_ACC]}\n")
-        # print(f"Results written to {os.path.join(self.results_dir, 'results.txt')}")
-        
 
 
 def get_uml_gpt(vocab_size, args):
@@ -396,17 +380,19 @@ def get_uml_gpt(vocab_size, args):
             args: Namespace
                 The arguments
     """
-    embed_dim = args.embed_dim
-    n_layer = args.num_layers
-    n_head = args.num_heads
-    block_size = args.block_size
 
-    uml_gpt = UMLGPT(vocab_size, embed_dim, block_size, n_layer, n_head)
-    if args.from_pretrained is not None:
+    
+    if FROM_PRETRAINED in args:
         uml_gpt = UMLGPT.from_pretrained(args.from_pretrained)
         print(f'Loaded pretrained model from {args.from_pretrained}')
+    else:
+        embed_dim = args.embed_dim
+        n_layer = args.num_layers
+        n_head = args.num_heads
+        block_size = args.block_size
+        uml_gpt = UMLGPT(vocab_size, embed_dim, block_size, n_layer, n_head)
     
-    uml_gpt.to(device)
+    uml_gpt.to(DEVICE)
     return uml_gpt
 
 
@@ -420,7 +406,7 @@ def train_umlgpt(dataset, args):
             args: Namespace
                 The arguments
     """
-    if args.tokenizer != 'word':
+    if args.tokenizer != WORD_TOKENIZER:
         tokenizer = get_tokenizer(args.tokenizer)
     else:
         tokenizer = get_tokenizer(WORD_TOKENIZER, dataset)
@@ -556,7 +542,7 @@ def train_hf_for_classification(dataset, tokenizer, args):
             args: Namespace
                 The arguments
     """
-    model_name = args.classification_model if args.from_pretrained is None else args.from_pretrained
+    model_name = args.from_pretrained
     batch_size = args.batch_size
     train, test, unseen = dataset[TRAIN_LABEL], dataset[TEST_LABEL], dataset[UNSEEN_LABEL]
     # Show the training loss with every epoch
@@ -572,7 +558,7 @@ def train_hf_for_classification(dataset, tokenizer, args):
         save_strategy="epoch",
         learning_rate=2e-5,
         weight_decay=0.01,
-        warmup_steps=args.warmup_steps,
+        warmup_steps=100,
         per_device_train_batch_size=batch_size,
         per_device_eval_batch_size=batch_size,
         # fp16=True,

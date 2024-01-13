@@ -1,12 +1,5 @@
-import os
-
 from parameters import parse_args
 from ontouml_data_utils import get_graphs_data_kfold, get_triples, get_triples_dataset
-from trainers import get_uml_gpt
-from data_generation_utils import get_dataloaders
-from models import UMLGPTClassifier
-from trainers import UMLGPTTrainer
-from utils import get_recommendation_metrics
 from trainers import get_tokenizer
 from trainers import train_hf_for_classification
 
@@ -26,36 +19,30 @@ def pretrained_lm_sequence_classification(data, label_encoder, args):
 
     """
 
-    tokenizer = get_tokenizer(args.tokenizer, special_tokens=[])
+    tokenizer = get_tokenizer(args.from_pretrained, special_tokens=[])
     dataset = {split_type: get_triples_dataset(data[split_type], label_encoder, tokenizer) for split_type in data}
     dataset['train'].num_classes = len(label_encoder)
     train_hf_for_classification(dataset, tokenizer, args)
 
 
-def ontouml_classification(args):
+def main(args):
     create_run_config(args)
-    for i, (seen_graphs, unseen_graphs, label_encoder) in enumerate(get_graphs_data_kfold(args)):
-        print(len(seen_graphs), len(unseen_graphs), len(label_encoder))
-        train_triples_seen = get_triples(seen_graphs, distance=args.distance, train=True)
-        test_triples_seen = get_triples(seen_graphs, distance=args.distance, train=False)
+    # for i, (seen_graphs, unseen_graphs, label_encoder) in enumerate(get_graphs_data_kfold(args)):
+    #     print(len(seen_graphs), len(unseen_graphs), len(label_encoder))
+    #     train_triples_seen = get_triples(seen_graphs, distance=args.distance, train=True)
+    #     test_triples_seen = get_triples(seen_graphs, distance=args.distance, train=False)
 
-        test_triples_unseen = get_triples(unseen_graphs, distance=args.distance, train=False)
-        data = {
-            'train': train_triples_seen,
-            'test': test_triples_seen,
-            'unseen': test_triples_unseen,
-        }
+    #     test_triples_unseen = get_triples(unseen_graphs, distance=args.distance, train=False)
+    #     data = {
+    #         'train': train_triples_seen,
+    #         'test': test_triples_seen,
+    #         'unseen': test_triples_unseen,
+    #     }
 
-        pretrained_lm_sequence_classification(data, label_encoder, args)
-        break
+    #     pretrained_lm_sequence_classification(data, label_encoder, args)
+    #     break
 
 
-# if __name__ == '__main__':
-#     args = parse_args()
-#     args.stage = 'ontouml_cls'
-#     config = create_run_config(args)
-#     print(config)
-
-#     ontouml_classification(args)
-    
-    
+if __name__ == '__main__':
+    args = parse_args()
+    main(args)

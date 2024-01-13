@@ -193,12 +193,21 @@ def get_attr_name(uploaded_file):
     return uploaded_file
 
 
+def create_run_command_line(args):
+    arguments = ['python', task2file_map[args.stage]]
+    arguments += [f"--{k}={getattr(args, k)}" for k in vars(args) if getattr(args, k) is not None]
+    return " ".join(arguments)
+
+
 def create_run_config(args):
     """
         This method creates a run config for the given arguments
     """
     set_seed(args.seed)
     config = {k: get_attr_name(getattr(args, k)) for k in vars(args)}
+    config[RUN_COMMAND] = create_run_command_line(args)
+
+    print(config[RUN_COMMAND])
     
     file_name = f"{args.stage}_"
     if args.stage == PRETRAINING:
@@ -207,19 +216,24 @@ def create_run_config(args):
         else:
             file_name += f"{config[GPT_MODEL]}"
 
-    elif args.stage == CLASSIFICATION:
+    elif args.stage == UML_CLASSIFICATION:
         if args.classification_model not in [UMLGPTMODEL]:
-            file_name += f"{config[CLASSIFICATION_MODEL]}_tok={config[CLASSIFICATION_MODEL]}"
+            file_name += f"{os.path.basename(config[FROM_PRETRAINED])}"
         else:
-            file_name += f"{config[CLASSIFICATION_MODEL]}_tok={config['tokenizer']}"
+            if FROM_PRETRAINED in config:
+                file_name += f"{os.path.basename(config[FROM_PRETRAINED])}"
+            else:
+                file_name += f"{config[CLASSIFICATION_MODEL]}"
+
+            file_name += f"_tok={config['tokenizer']}"
+        
         file_name += f"_{config[CLASSIFICATION_TYPE]}"
-        file_name += f"{config[FROM_PRETRAINED] if config[FROM_PRETRAINED] else ''}"
+        
 
     elif args.stage == LINK_PREDICTION:
-        file_name += f"{config[EMBEDDING_MODEL]}_tok={config['tokenizer']}"
+        file_name += f"{os.path.basename(config[EMBEDDING_MODEL])}_tok={config['tokenizer']}"
     
     elif args.stage == ONTOML_CLS:
-        file_name += f"{config[CLASSIFICATION_MODEL]}_tok={config['tokenizer']}"
         file_name += f"_fp={config[FROM_PRETRAINED]}"
         file_name += f"_distance={args.distance}"
         file_name += f"_distance={args.exclude_limit}"
@@ -228,16 +242,13 @@ def create_run_config(args):
     os.makedirs(os.path.join(args.log_dir, file_name), exist_ok=True)
     args.log_dir = os.path.join(args.log_dir, file_name)
     
-    os.makedirs(os.path.join('results', file_name), exist_ok=True)
-    args.results_dir = os.path.join('results', file_name)
-    
-    os.makedirs(os.path.join(MODELS_DIR, file_name), exist_ok=True)
-    args.models_dir = os.path.join(MODELS_DIR, file_name)
+    os.makedirs(os.path.join(args.models_dir, file_name), exist_ok=True)
+    args.models_dir = os.path.join(args.models_dir, file_name)
 
     args.config_file_name = file_name
 
-    print(config)
-    print(args.models_dir)
+    # print(config)
+    # print(args.models_dir)
 
     json.dump(config, open(os.path.join(args.models_dir, f'config.json'), 'w'), indent=4)
 
@@ -256,10 +267,10 @@ def save_temporary_uploaded_file(uploaded_file, ext='.pt'):
 
 
 
-def get_plms(task_type, model_name):
+def get_plms(models_dir, task_type, model_name):
     plms = [
-        f for f in os.listdir(MODELS_DIR) \
-        if os.path.isdir(os.path.join(MODELS_DIR, f)) and \
+        f for f in os.listdir(models_dir) \
+        if os.path.isdir(os.path.join(models_dir, f)) and \
         f.startswith(f'{task_type}_{model_name}')
     ]
     return plms

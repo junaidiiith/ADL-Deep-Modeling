@@ -1,6 +1,4 @@
-from streamlit.runtime.uploaded_file_manager import UploadedFile
 from collections import Counter
-import json
 from math import e
 import os
 import pickle
@@ -114,17 +112,10 @@ def get_node_triples_from_graphs(graphs):
 
 
 def get_graphs(graphs_file):
-    if isinstance(graphs_file, str):
-        graph_file_name = os.path.basename(graphs_file).split('.')[0]
-        node_triples_file = os.path.join(os.path.dirname(graphs_file), f'{graph_file_name}_node_triples.pkl')
-        graphs = pickle.load(open(graphs_file, 'rb'))
-
-    elif isinstance(graphs_file, UploadedFile):
-        graphs = pickle.loads(graphs_file.getvalue())
-        graph_file_name = graphs_file.name.split('.')[0]
-        node_triples_file = os.path.join('uploaded_data', f'{graph_file_name}_node_triples.pkl')
-    
-
+    graphs_file_dir = os.path.dirname(graphs_file)
+    graphs_file_name = os.path.basename(graphs_file).split('.')[0]
+    graphs = pickle.load(open(graphs_file, 'rb'))
+    node_triples_file = os.path.join(graphs_file_dir, f'{graphs_file_name}_node_triples.pkl')
     return graphs, node_triples_file
 
 

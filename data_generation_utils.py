@@ -14,8 +14,6 @@ from models import UMLGPT, UMLGPTClassifier
 from stqdm import stqdm
 from constants import *
 
-device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-
 
 """
     This file contains the utility functions for graph data, pytorch datasets generation and processing.
@@ -451,9 +449,9 @@ def get_embedding(model, encodings, pooling='last'):
         for batch in encoding_dataloader:
 
             if isinstance(model, UMLGPT) or isinstance(model, UMLGPTClassifier):
-                outputs = model.get_embedding(batch['input_ids'].to(device), batch['attention_mask'].to(device))
+                outputs = model.get_embedding(batch['input_ids'].to(DEVICE), batch['attention_mask'].to(DEVICE))
             else:
-                encodings = {k: v.to(device) for k, v in batch.items()}
+                encodings = {k: v.to(DEVICE) for k, v in batch.items()}
                 outputs = model(**encodings)[0]
 
             outputs = outputs.cpu().detach()
@@ -614,6 +612,12 @@ class VocabTokenizer:
         pickle.dump(self, open(tokenizer_file, 'wb'))
         print(f"Tokenizer saved to {tokenizer_file}")
 
+    def __name__(self):
+        return str(self)
+    
+    @property
+    def name_or_path(self):
+        return str(self)
 
 class GenerativeUMLDataset(Dataset):
     """
@@ -714,7 +718,7 @@ class LinkPredictionDataset(DGLDataset):
         self.raw_graphs = graphs
         self.tokenizer = tokenizer
         self.model = model
-        self.model.to(device)
+        self.model.to(DEVICE)
 
         self.test_size = test_size
         self.prefix = prefix

@@ -266,7 +266,8 @@ def get_graphs_data_kfold(args):
     label_encoder = get_label_encoder(ontology_graphs, args.exclude_limit)
     stereotypes_classes = list(label_encoder.keys())
     X = [1]*len(ontology_graphs)
-    k_folds = int(1/args.test_size)
+    # k_folds = int(1/args.test_size)
+    k_folds = 5
     skf = StratifiedKFold(n_splits=k_folds, shuffle=True, random_state=args.seed)
     for train_idx, val_idx in skf.split(X, X):
         seen_graphs = [ontology_graphs[i] for i in train_idx]

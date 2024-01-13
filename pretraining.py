@@ -1,3 +1,4 @@
+from streamlit.runtime.uploaded_file_manager import UploadedFile
 import os
 from parameters import parse_args
 from graph_utils import get_graph_data
@@ -12,14 +13,11 @@ The pretraining is done on the graph data.
 """
 
 def main(args):
-    config = create_run_config(args)
-    print(config)
+    create_run_config(args)
+    # print(config)
+    # print("Loading graph data from:", args.graphs_file)
 
-
-    data_dir = args.data_dir
-    graph_data_file = os.path.join(data_dir, args.graphs_file)
-    print("Loading graph data from:", graph_data_file)
-    graph_data = get_graph_data(graph_data_file)
+    graph_data = get_graph_data(args.graphs_file)
     for _, data in enumerate(get_kfold_lm_data(graph_data, seed=args.seed)):
         break
     
@@ -34,7 +32,6 @@ def main(args):
         train_hugging_face_gpt(dataset, args)
 
 
-# if __name__ == '__main__':
-#     args = parse_args()
-#     args.stage = 'pre'
-#     main(args)
+if __name__ == '__main__':
+    args = parse_args()
+    main(args)

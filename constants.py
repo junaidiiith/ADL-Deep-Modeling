@@ -1,5 +1,6 @@
-MODELS_DIR = 'models'
+import torch
 
+UPLOADED_DATA_DIR = 'uploaded_data'
 
 EPOCH = 'Epoch'
 SPLIT_TYPE = 'split_type'
@@ -40,18 +41,35 @@ classification_types = {
 
 UMLGPTMODEL = 'uml-gpt'
 WORD_TOKENIZER = 'word'
+TOKENIZER_FILE = 'tokenizer_file'
 
 PRETRAINING = 'pre'
 ONTOML_CLS = 'ontouml_cls'
-CLASSIFICATION = 'cls'
+UML_CLASSIFICATION = 'cls'
 LINK_PREDICTION = 'lp'
+PRETRAINING_PY = 'pretraining.py'
+UML_CLASSIFICATION_PY = 'uml_classification.py'
+ONTOML_CLS_PY = 'ontouml_classification.py'
+LINK_PREDICTION_PY = 'link_prediction.py'
+
+task2file_map = {
+    ONTOML_CLS: ONTOML_CLS_PY,
+    UML_CLASSIFICATION: UML_CLASSIFICATION_PY,
+    PRETRAINING: PRETRAINING_PY,
+    LINK_PREDICTION: LINK_PREDICTION_PY
+}
+RUN_COMMAND = 'run_command'
+
+DEVICE = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+
+
 
 CLASSIFICATION_MODEL = 'classification_model'
 GPT_MODEL = 'gpt_model'
 EMBEDDING_MODEL = 'embedding_model'
 CLASSIFICATION_TYPE = 'class_type'
 FROM_PRETRAINED = 'from_pretrained'
-
+TOKENIZER_LABEL = 'tokenizer'
 
 uml_plm_names = {
     'BERT Cased': 'bert-base-cased',

@@ -1,3 +1,5 @@
+from parameters import parse_args
+import os
 import pickle
 from graph_utils import get_graph_data
 from data_generation_utils import get_kfold_lp_data
@@ -35,7 +37,7 @@ def collate_graphs(graphs):
     return collated_graph
 
 
-def import_model(args):
+def import_model(args, tokenizer):
     """
         Import the language model for link prediction
         If the model is uml-gpt, then the pretrained model is loaded from the path provided in args
@@ -50,7 +52,9 @@ def import_model(args):
         
         else:
             print("Loading model from:", args.embedding_model)
-            return AutoModel.from_pretrained(args.embedding_model)
+            model = AutoModel.from_pretrained(args.embedding_model, ignore_mismatched_sizes=True)
+            model.resize_token_embeddings(len(tokenizer))
+            return model
 
     except Exception as e:
         print(e)
@@ -68,11 +72,13 @@ def train_link_prediction(graphs, args):
         The GNN model is used to get node embeddings from the graph structure
         The predictor model is used to predict the link between two nodes
     """
-    language_model = import_model(args)
+    
     if 'tokenizer_file' in args and args.tokenizer_file.endswith('.pkl'):
         tokenizer = pickle.load(open(args.tokenizer_file, 'rb'))
     else:
         tokenizer = get_tokenizer(args.tokenizer)
+    
+    language_model = import_model(args, tokenizer)
 
     
     input_dim = language_model.token_embedding_table.weight.data.shape[1] if args.embedding_model == UMLGPTMODEL else language_model.config.hidden_size
@@ -97,7 +103,7 @@ def train_link_prediction(graphs, args):
         # with st.empty():
         #     st.write(f"Training Link Prediction on {split_type} graphs")
 
-        dataset_prefix = f"{split_type}_ip={input_dim}_tok={tokenizer}"
+        dataset_prefix = f"{split_type}_ip={input_dim}_tok={os.path.basename(tokenizer.name_or_path)}"
         dataset = LinkPredictionDataset(
             graphs=graphs[split_type], 
             tokenizer=tokenizer, 
@@ -114,7 +120,7 @@ def train_link_prediction(graphs, args):
         lp_trainer.run_epochs(dataloader, args.num_epochs)
 
 
-def link_prediction(args):
+def main(args):
     """
         This function trains the link prediction task
         It loads the graph data from the path provided in args
@@ -129,9 +135,6 @@ def link_prediction(args):
     train_link_prediction(graphs, args)
 
 
-# if __name__ == '__main__':
-    
-#     args = parse_args()
-#     args.stage = 'lp'
-    # create_run_config(args)
-#     link_prediction(args)
+if __name__ == '__main__':
+    args = parse_args()
+    main(args)
