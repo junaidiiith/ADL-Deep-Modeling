@@ -1,96 +1,91 @@
-from streamlit.runtime.uploaded_file_manager import UploadedFile
-import zipfile
+from pages_utils import set_uploaded_file_path
 import streamlit as st
-from sympy import limit
-from uml_classification import uml_classification
+from uml_classification import main as uml_classification
 from parameters import parse_args
 import json
 import os
-from constants import UMLGPTMODEL
-from transformers import \
-    (
-        AutoModelForMaskedLM, 
-        AutoModelForCausalLM, 
-        AutoModelForSequenceClassification,
-        AutoTokenizer, AutoConfig
-    )
+from constants import *
+
+from utils import get_plms
 
 
 def validate():
-    process_model_zip()
     if graph_file is None:
         st.error("Please upload a graph file")
 
     return True
-        
 
 
-def process_model_zip():
-    if classification_model == UMLGPTMODEL and isinstance(model_zip, UploadedFile):
-        with zipfile.ZipFile(model_zip, 'r') as zip_ref:
-            zip_ref.extractall()
-            all_files = list()
-            for f, _, files in os.walk(model_zip.name.split('.')[0]):
-                for file in files:
-                    all_files.append(os.path.join(f, file))
+def process_uml_gpt_dir(uml_plm_dir):
+    all_files = [f for f in os.listdir(os.path.join(args.models_dir, uml_plm_dir)) if not f.startswith('.')]
+    config_file = [f for f in all_files if f.endswith('config.json')][0]
+    conf_file_path = os.path.join(args.models_dir, uml_plm_dir, config_file)
+    config = json.load(open(conf_file_path, 'r'))
 
-            config_file = [f for f in all_files if f.endswith('config.json')][0]
-            config = json.load(open(config_file, 'r'))
-            model_pretrained_file = [f for f in all_files if f.endswith('best_model.pth') or f.endswith('best_model.pt')][0]
-            tokenizer = [f for f in all_files if f.endswith('.pkl') or f.endswith('.pickle')][0]
-            if not tokenizer.endswith('.pkl'):
-                tokenizer = config['tokenizer']
+    model_pretrained_file = [os.path.join(uml_plm_dir, f) for f in all_files if f.endswith('best_model.pth') or f.endswith('best_model.pt')][0]
+    tokenizer = [os.path.join(uml_plm_dir, f) for f in all_files if f.endswith('.pkl') or f.endswith('.pickle')]
+    if len(tokenizer) and tokenizer[0].endswith('.pkl'):
+        tokenizer = tokenizer[0]
+    else:
+        tokenizer = config['tokenizer']
 
-            args.from_pretrained = os.path.join('models', model_pretrained_file)
-            args.tokenizer_file = tokenizer
-            args.tokenizer = 'word' if tokenizer.endswith('.pkl') else tokenizer
-
-
+    args.from_pretrained = os.path.join(args.models_dir, model_pretrained_file)
+    args.tokenizer_file = os.path.join(args.models_dir, tokenizer)
+    args.tokenizer = WORD_TOKENIZER if tokenizer.endswith('.pkl') else tokenizer
+    
 
 args = parse_args()
 st.set_page_config(page_title="UML Classification", page_icon="🧩")
 
 st.markdown("""UML Class and Supertype Prediction""")
 
-classification_model = st.selectbox('Classification Model', ['bert-base-cased', 'uml-gpt', 'gpt2'])
+classification_model = uml_plm_names[st.selectbox('Classification Model', list(uml_plm_names.keys()))]
 args.classification_model = classification_model
 
 
-if classification_model == 'uml-gpt':
+if classification_model == UMLGPTMODEL:
     pretrained = st.toggle('Use Pretrained Model?', value=False)
     if pretrained:
-        model_zip = st.file_uploader("Pretrained UML GPT Model", type=['zip'])
+        plms = get_plms(args.models_dir, PRETRAINING, classification_model)
+        plm_dir = st.selectbox('Pretrained Model', plms)
+        process_uml_gpt_dir(plm_dir)
     else:
-        tokenizer = st.selectbox('Tokenizer', ['word', 'bert-base-cased', 'gpt2'])
+        tokenizer = tokenizer_names[st.selectbox('Tokenizer', list(tokenizer_names.keys()))]
         args.tokenizer = tokenizer
-        args.tokenizer_file = tokenizer
-        args.from_pretrained = None
+
 else:
-    model_zip = st.file_uploader("Pretrained HF Model", type=['zip'])
-    args.classification_model = model_zip.name.split('.')[0]
-    args.tokenizer = args.classification_model
+    fine_tuned = st.toggle('Use Fine Tuned Model?', value=False)
+    if fine_tuned:
+        if not classification_model in [UMLGPTMODEL, 'gpt2']:
+            st.error("Fine Tuned Model is only available for bert-base-cased and gpt2")
+
+        plms = get_plms(args.models_dir, PRETRAINING, classification_model)
+        plm_dir = os.path.join(args.models_dir, st.selectbox('Pretrained HF Model', plms))
+        args.from_pretrained = plm_dir
+    else:
+        args.from_pretrained = args.classification_model
 
 
-classification_type = st.selectbox('Classification Type', ['entity', 'super_type'])
-args.class_type = classification_type
+classification_type = st.selectbox('Classification Type', classification_types.keys())
+args.class_type = classification_types[classification_type]
 
 
-if classification_model == UMLGPTMODEL:
-    st.markdown("Training Parameters")
-    c1, c2, c3 = st.columns(3)
-    with c1:
-        batch_size = st.slider('Batch Size', min_value=16, max_value=128, value=32, step=16)
-        args.batch_size = batch_size
 
-    with c2:
-        num_epochs = st.text_input('Number of Epochs', value='10')
-        args.num_epochs = int(num_epochs)
+st.markdown("Training Parameters")
+c1, c2, c3 = st.columns(3)
+with c1:
+    batch_size = st.slider('Batch Size', min_value=16, max_value=128, value=32, step=16)
+    args.batch_size = batch_size
 
-    with c3:
-        lr = st.text_input('Learning Rate', value='1e-3')
-        args.lr = float(lr)
+with c2:
+    num_epochs = st.text_input('Number of Epochs', value='10')
+    args.num_epochs = int(num_epochs)
 
+with c3:
+    lr = st.text_input('Learning Rate', value='1e-3')
+    args.lr = float(lr)
 
+if classification_model == UMLGPTMODEL and not pretrained:
     st.markdown("Model Parameters")
     if classification_model == 'uml-gpt':
         c1, c2, c3 = st.columns(3)
@@ -114,17 +109,11 @@ if classification_model == UMLGPTMODEL:
 
 # Example file upload
 graph_file = st.file_uploader("Graph Pickle File", type=['pkl', 'gpickle', 'pickle'])
-args.stage = 'cls'
-args.graphs_file = graph_file
+args.stage = UML_CLASSIFICATION
 
 classification_button = st.button('Start Classification Training', on_click=validate)
 
 if classification_button:
+    set_uploaded_file_path(args, graph_file)
     uml_classification(args)
     st.balloons()
-            
-# hf_model = st.text_input("Pretrained HF Model")
-# if hf_model is not None and 'bert' in hf_model:
-#     model = AutoModelForMaskedLM.from_pretrained(hf_model)
-#     tokenizer = AutoTokenizer.from_pretrained(hf_model)
-    

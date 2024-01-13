@@ -1,9 +1,12 @@
 import streamlit as st
+from constants import PRETRAINING, UMLGPTMODEL
 from pretraining import main as pretrainer
 from parameters import parse_args
+from constants import gpt_model_names, tokenizer_names
+from pages_utils import set_uploaded_file_path
 
 def validate():
-    if args.graphs_file is None:
+    if graph_file is None:
         st.error("Graphs file is required")
         return False
 
@@ -33,9 +36,9 @@ with c3:
 
 
 st.markdown("GPT Model Parameters")
-args.gpt_model = st.selectbox('GPT Model', ['uml-gpt', 'gpt2'])
+args.gpt_model = gpt_model_names[st.selectbox('GPT Model', list(gpt_model_names.keys()))]
 
-if args.gpt_model == 'uml-gpt':
+if args.gpt_model == UMLGPTMODEL:
 
     c1, c2, c3 = st.columns(3)
     with c1:
@@ -48,16 +51,16 @@ if args.gpt_model == 'uml-gpt':
         num_heads = st.slider('Number of Heads', min_value=1, max_value=12, value=8, step=1)
         args.num_heads = int(num_heads)
 
-    c1, c2, c3 = st.columns(3)
+    c1, c2 = st.columns(2)
     with c1:
         block_size = st.slider('Block Size', min_value=128, max_value=1024, value=512, step=128)
         args.block_size = int(block_size)
     with c2:
         pooling = st.selectbox('Pooling', ['mean', 'max', 'cls', 'sum', 'last'])
         args.pooling = pooling
-    with c3:
-        tokenizer = st.selectbox('Tokenizer', ['word', 'bert-base-cased'])
-        args.tokenizer = tokenizer
+    
+    tokenizer = tokenizer_names[st.selectbox('Tokenizer', list(tokenizer_names.keys()))]
+    args.tokenizer = tokenizer
 
 elif args.gpt_model == 'gpt2':
     args.tokenizer = args.gpt_model
@@ -65,10 +68,11 @@ elif args.gpt_model == 'gpt2':
 
 # Example file upload
 graph_file = st.file_uploader("Graph Pickle File", type=['pkl', 'gpickle', 'pickle'])
-args.stage = 'pre'
-if graph_file is not None:
-    args.graphs_file = graph_file.name
+args.stage = PRETRAINING
 
 start_button = st.button('Start Pretraining', on_click=validate)
 if start_button:
+    set_uploaded_file_path(args, graph_file)
+
     pretrainer(args)
+    st.balloons()
