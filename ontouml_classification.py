@@ -27,20 +27,20 @@ def pretrained_lm_sequence_classification(data, label_encoder, args):
 
 def main(args):
     create_run_config(args)
-    # for i, (seen_graphs, unseen_graphs, label_encoder) in enumerate(get_graphs_data_kfold(args)):
-    #     print(len(seen_graphs), len(unseen_graphs), len(label_encoder))
-    #     train_triples_seen = get_triples(seen_graphs, distance=args.distance, train=True)
-    #     test_triples_seen = get_triples(seen_graphs, distance=args.distance, train=False)
+    for i, (seen_graphs, unseen_graphs, label_encoder) in enumerate(get_graphs_data_kfold(args)):
+        print(len(seen_graphs), len(unseen_graphs), len(label_encoder))
+        train_triples_seen = get_triples(seen_graphs, distance=args.distance, train=True)
+        test_triples_seen = get_triples(seen_graphs, distance=args.distance, train=False)
 
-    #     test_triples_unseen = get_triples(unseen_graphs, distance=args.distance, train=False)
-    #     data = {
-    #         'train': train_triples_seen,
-    #         'test': test_triples_seen,
-    #         'unseen': test_triples_unseen,
-    #     }
+        test_triples_unseen = get_triples(unseen_graphs, distance=args.distance, train=False)
+        data = {
+            'train': train_triples_seen,
+            'test': test_triples_seen,
+            'unseen': test_triples_unseen,
+        }
 
-    #     pretrained_lm_sequence_classification(data, label_encoder, args)
-    #     break
+        pretrained_lm_sequence_classification(data, label_encoder, args)
+        break
 
 
 if __name__ == '__main__':

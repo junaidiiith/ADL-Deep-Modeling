@@ -1,3 +1,6 @@
+import os
+import shutil
+from zipfile import ZipFile
 import streamlit as st
 from constants import ONTOML_CLS
 from ontouml_classification import main as ontouml_classification
@@ -55,12 +58,19 @@ data_dir = st.file_uploader("Upload OntoUML Models", type=['zip'])
 args.distance = distance
 args.exclude_limit = exclude_limit
 args.ontouml_mask_prob = ontouml_mask_prob
-args.data_dir = data_dir
+
 
 
 start_stereotyping_button = st.button('Start Stereotype Classification Training', on_click=validate)
 if start_stereotyping_button:
-    args.exclude_limit = 1
     args.stage = ONTOML_CLS
+    data_dir_name = os.path.join('uploaded_data',  data_dir.name.split('.')[0])
+    with ZipFile(data_dir, 'r') as zip:
+        zip.extractall('uploaded_data')
+        args.data_dir = data_dir_name
     ontouml_classification(args)
+
+    shutil.rmtree(data_dir_name)
+    
+    
     st.balloons()

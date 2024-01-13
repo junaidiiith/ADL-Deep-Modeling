@@ -33,7 +33,7 @@ def train_uml_gpt_classification(data, label_encoder, compute_metrics_fn, args):
         args (Namespace): The arguments passed to the script
     """
 
-    if TOKENIZER_FILE in args:
+    if args.tokenizer_file is not None:
         tokenizer = pickle.load(open(args.tokenizer_file, 'rb'))
     
     elif args.tokenizer == WORD_TOKENIZER:
@@ -70,17 +70,17 @@ def pretrained_lm_sequence_classification(data, label_encoder, args):
 def main(args):
     create_run_config(args)
     # st.json(config)
-    # graph_data = get_graph_data(args.graphs_file)
-    # entity_map, super_types_map = graph_data['entities_encoder'], graph_data['super_types_encoder']
-    # for i, data in enumerate(get_kfold_lm_data(graph_data, seed=args.seed)):
-    #     break
+    graph_data = get_graph_data(args.graphs_file)
+    entity_map, super_types_map = graph_data['entities_encoder'], graph_data['super_types_encoder']
+    for i, data in enumerate(get_kfold_lm_data(graph_data, seed=args.seed)):
+        break
     
-    # label_encoder = super_types_map if args.class_type == 'super_type' else entity_map
+    label_encoder = super_types_map if args.class_type == 'super_type' else entity_map
 
-    # if args.classification_model in [UMLGPTMODEL]:
-    #     train_uml_gpt_classification(data, label_encoder, compute_metrics_fn=get_recommendation_metrics, args=args)
-    # else:
-    #     pretrained_lm_sequence_classification(data, label_encoder, args)
+    if args.classification_model in [UMLGPTMODEL]:
+        train_uml_gpt_classification(data, label_encoder, compute_metrics_fn=get_recommendation_metrics, args=args)
+    else:
+        pretrained_lm_sequence_classification(data, label_encoder, args)
 
 
 if __name__ == '__main__':

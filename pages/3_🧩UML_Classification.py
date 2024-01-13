@@ -26,11 +26,11 @@ def process_uml_gpt_dir(uml_plm_dir):
     tokenizer = [os.path.join(uml_plm_dir, f) for f in all_files if f.endswith('.pkl') or f.endswith('.pickle')]
     if len(tokenizer) and tokenizer[0].endswith('.pkl'):
         tokenizer = tokenizer[0]
+        args.tokenizer_file = os.path.join(args.models_dir, tokenizer)
     else:
         tokenizer = config['tokenizer']
 
     args.from_pretrained = os.path.join(args.models_dir, model_pretrained_file)
-    args.tokenizer_file = os.path.join(args.models_dir, tokenizer)
     args.tokenizer = WORD_TOKENIZER if tokenizer.endswith('.pkl') else tokenizer
     
 

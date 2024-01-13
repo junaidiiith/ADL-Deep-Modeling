@@ -382,7 +382,7 @@ def get_uml_gpt(vocab_size, args):
     """
 
     
-    if FROM_PRETRAINED in args:
+    if args.from_pretrained is not None:
         uml_gpt = UMLGPT.from_pretrained(args.from_pretrained)
         print(f'Loaded pretrained model from {args.from_pretrained}')
     else:

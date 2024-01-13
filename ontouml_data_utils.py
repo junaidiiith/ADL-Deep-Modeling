@@ -175,10 +175,8 @@ def get_all_files(zip_file):
 
 def get_ontouml_to_nx(data_dir, min_stereotypes=10):
     ontouml_graphs = list()
-    if isinstance(data_dir, UploadedFile):
-        models = get_all_files(data_dir)
-    else:
-        models = find_files_with_extension(data_dir, "json")
+    models = find_files_with_extension(data_dir, "json")
+    print(data_dir, len(models))
         
     for mfp in tqdm(models, desc=f"Reading {len(models)} OntoUML models"):
         if mfp.endswith(".ecore") or mfp.endswith(".json"):
@@ -190,10 +188,6 @@ def get_ontouml_to_nx(data_dir, min_stereotypes=10):
             if len(stereotype_nodes) >= min_stereotypes:
                 ontouml_graphs.append((g, mfp))
     
-    if isinstance(data_dir, UploadedFile):
-        shutil.rmtree(data_dir.name.split(os.sep)[-1].split(".")[0])
-    else:
-        shutil.rmtree(data_dir.split(os.sep)[-1].split(".")[0])
     return ontouml_graphs
 
 

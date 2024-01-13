@@ -73,7 +73,7 @@ def train_link_prediction(graphs, args):
         The predictor model is used to predict the link between two nodes
     """
     
-    if 'tokenizer_file' in args and args.tokenizer_file.endswith('.pkl'):
+    if args.tokenizer_file is not None and args.tokenizer_file.endswith('.pkl'):
         tokenizer = pickle.load(open(args.tokenizer_file, 'rb'))
     else:
         tokenizer = get_tokenizer(args.tokenizer)

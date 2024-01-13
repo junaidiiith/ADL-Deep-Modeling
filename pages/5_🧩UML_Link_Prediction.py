@@ -99,7 +99,7 @@ with c1:
     args.lr = float(st.text_input('Learning Rate', value='1e-3'))
 
 with c2:
-    args.weight_decay = st.text_input('Weight Decay', value='1e-4')
+    args.weight_decay = float(st.text_input('Weight Decay', value='1e-4'))
 
 with c3:
     args.warmup_steps = int(st.text_input('Warmup Steps', value='100'))
