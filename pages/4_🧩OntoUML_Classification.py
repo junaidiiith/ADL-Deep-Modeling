@@ -7,6 +7,7 @@ from ontouml_classification import main as ontouml_classification
 from parameters import parse_args
 from constants import stereotype_classification_model_names as model_names
 
+
 def validate():
     if args.data_dir is None:
         st.error("Please upload a graph file")

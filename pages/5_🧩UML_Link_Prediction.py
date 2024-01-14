@@ -1,7 +1,7 @@
 from pages_utils import set_uploaded_file_path
 import os
 import json
-from utils import get_plms
+from pages_utils import get_plms
 import streamlit as st
 from link_prediction import main as link_prediction
 from parameters import parse_args

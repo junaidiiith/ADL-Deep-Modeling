@@ -1,12 +1,10 @@
 import pickle
 import shutil
 from zipfile import ZipFile
-from numpy import isin
 from pyecore.resources import ResourceSet, URI
 import networkx as nx
 
 import os
-from tqdm.auto import tqdm
 import networkx as nx
 from stqdm import stqdm
 

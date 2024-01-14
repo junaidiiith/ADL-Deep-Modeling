@@ -1,13 +1,13 @@
 from parameters import parse_args
 import os
 import pickle
-from graph_utils import get_graph_data
-from data_generation_utils import get_kfold_lp_data
-from utils import create_run_config
+from nx2str import get_graph_data
+from uml_data_generation import get_kfold_lp_data
+from common_utils import create_run_config
 from models import UMLGPT
 from transformers import AutoModel
-from trainers import get_tokenizer
-from data_generation_utils import LinkPredictionDataset
+from training_utils import get_tokenizer
+from datasets import LinkPredictionDataset
 from dgl.dataloading import GraphDataLoader
 import dgl
 from models import GNNModel, MLPPredictor
@@ -135,6 +135,6 @@ def main(args):
     train_link_prediction(graphs, args)
 
 
-if __name__ == '__main__':
-    args = parse_args()
-    main(args)
+# if __name__ == '__main__':
+#     args = parse_args()
+#     main(args)

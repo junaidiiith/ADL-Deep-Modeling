@@ -1,18 +1,18 @@
 import pickle
 from parameters import parse_args
-from graph_utils import get_graph_data
-from trainers import get_uml_gpt
-from data_generation_utils import get_kfold_lm_data
-from data_generation_utils import get_classification_dataset
-from data_generation_utils import get_dataloaders
+from nx2str import get_graph_data
+from training_utils import get_uml_gpt
+from uml_data_generation import get_kfold_lm_data
+from uml_data_generation import get_classification_dataset
+from uml_data_generation import get_dataloaders
 from models import UMLGPTClassifier
 from trainers import UMLGPTTrainer
-from utils import get_recommendation_metrics
-from trainers import get_tokenizer
-from trainers import train_hf_for_classification
-from constants import TRAINING_PHASE, UMLGPTMODEL, WORD_TOKENIZER, TOKENIZER_FILE
+from metrics import get_recommendation_metrics
+from training_utils import get_tokenizer
+from training_utils import train_hf_for_classification
+from constants import TRAINING_PHASE, UMLGPTMODEL, WORD_TOKENIZER
 
-from utils import create_run_config
+from common_utils import create_run_config
 
 
 def train_uml_gpt_classification(data, label_encoder, compute_metrics_fn, args):

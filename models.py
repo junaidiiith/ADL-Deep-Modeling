@@ -180,6 +180,8 @@ class UMLGPT(nn.Module):
         This method computes the loss for the next token prediction task
         This is achieved by shifting the labels by one position and computing the cross entropy loss
         """
+        block_size = self.position_embedding_table.weight.shape[0]
+        labels = labels[..., :block_size]
         loss = None
         if labels is not None:
             # Shift so that tokens < n predict n
@@ -196,14 +198,49 @@ class UMLGPT(nn.Module):
         x: [batch_size, seq_len]
         attention_mask: [batch_size, seq_len]
         """
+        block_size = self.position_embedding_table.weight.shape[0]
+        vocab_size = self.token_embedding_table.weight.shape[0]
+
+        x = x[..., :block_size]
+        attention_mask = attention_mask[..., :block_size]
+
+        try:
+            assert x.shape[-1] <= block_size
+        except AssertionError as e:
+            print("Block size is too small for the text!")
+            raise e
+
+        # print("Token embeddings", x.shape, torch.min(x), torch.max(x), vocab_size)
+        try:
+            assert torch.min(x) <= vocab_size
+            assert torch.max(x) <= vocab_size
+            
+        except AssertionError as e:
+            print("Fix the token embedding shape issue bro!")
+            raise e
+        
         token_embeddings = self.token_embedding_table(x)
+
         position_ids = torch.arange(x.size(1), dtype=torch.long, device=x.device)
         position_ids = position_ids.unsqueeze(0).expand_as(x)
+
+        # print("Position embeddings", position_ids.shape, torch.min(position_ids), torch.max(position_ids), block_size)
+        try:
+            torch.min(position_ids) <= block_size
+            torch.max(position_ids) <= block_size
+        except AssertionError as e:
+            print("Fix the position embeddings shape bro!")
+            raise e
         position_embeddings = self.position_embedding_table(position_ids)
+        
+
         embeddings = token_embeddings + position_embeddings
 
         # # Modify the forward pass to include src_key_padding_mask
+
+
         for block in self.blocks:
+            # print("Embed dim: ", embeddings.shape)
             embeddings = block(embeddings, attention_mask)
 
         embeddings = self.ln_f(embeddings)

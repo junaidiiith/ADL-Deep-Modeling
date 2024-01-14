@@ -1,73 +1,15 @@
-import pickle
+from torch.utils.tensorboard import SummaryWriter
+from constants import *
 import streamlit as st
 import pandas as pd
-from torch.utils.tensorboard import SummaryWriter
-from transformers import DataCollatorForLanguageModeling
-from utils import compute_metrics, compute_auc
+from metrics import compute_auc
 import torch
 from tqdm.auto import tqdm
 from stqdm import stqdm
 import os
 import torch.nn as nn
-from transformers import Trainer, TrainingArguments
-from transformers import AutoModelForCausalLM
-from transformers import GPT2Config, GPT2ForSequenceClassification
-from transformers import AutoModelForSequenceClassification
-from models import UMLGPT
-from transformers.integrations import NeptuneCallback
-from data_generation_utils import get_gpt2_dataset
-from data_generation_utils import get_dataloaders
-from data_generation_utils import get_pretrained_lm_tokenizer, get_word_tokenizer_tokenizer
-from data_generation_utils import get_generative_uml_dataset
-import transformers
 import itertools
-from data_generation_utils import SPECIAL_TOKENS
-from constants import *
-
-
-def suppress_neptune(trainer):
-    for cb in trainer.callback_handler.callbacks:
-        if isinstance(cb, NeptuneCallback):
-            trainer.callback_handler.remove_callback(cb)
-
-
-def compute_loss(pos_score, neg_score):
-    scores = torch.cat([pos_score, neg_score]).to(DEVICE)
-    labels = torch.cat([torch.ones(pos_score.shape[0]), torch.zeros(neg_score.shape[0])]).to(DEVICE)
-    return torch.nn.BCEWithLogitsLoss()(scores.float(), labels.float())
-
-
-
-def get_tokenizer(tokenizer_name, data=None, special_tokens=SPECIAL_TOKENS):
-    if data is None:
-        print("Creating pretrained LM tokenizer...")
-        tokenizer = get_pretrained_lm_tokenizer(tokenizer_name, special_tokens=special_tokens)
-        print("Done!")
-    else:
-        print("Creating word tokenizer...")
-        tokenizer = get_word_tokenizer_tokenizer(data)
-        print("Done!")
-    
-    return tokenizer
-
-
-
-def get_hf_classification_model(model_name, num_labels, tokenizer):
-    """
-        Get the hugging face classification model
-    """
-    if 'gpt2' in model_name:
-        model_config = GPT2Config.from_pretrained(pretrained_model_name_or_path=model_name, num_labels=num_labels)
-        tokenizer.padding_side = "left"
-        model = GPT2ForSequenceClassification.from_pretrained(pretrained_model_name_or_path=model_name, config=model_config)
-        model.resize_token_embeddings(len(tokenizer)) 
-        model.config.pad_token_id = model.config.eos_token_id
-    else:
-        model = AutoModelForSequenceClassification.from_pretrained(
-            pretrained_model_name_or_path=model_name, num_labels=num_labels, ignore_mismatched_sizes=True)
-        model.resize_token_embeddings(len(tokenizer))
-        
-    return model
+from training_utils import compute_loss
 
 
 class UMLGPTTrainer:
@@ -102,11 +44,13 @@ class UMLGPTTrainer:
     
     def train(self, epochs):
         self.model.train()
-                    
+
+        # for epoch in tqdm(range(epochs), desc='Training GPT'):            
         for epoch in stqdm(range(epochs), desc='Training GPT'):
             best_test_loss = float('inf')
             loss_label = f'{TRAIN_LABEL}_Loss'
             epoch_metrics = {EPOCH: int(f'{epoch+1}'), loss_label: 0}
+            # for i, batch in tqdm(enumerate(self.dataloaders[TRAIN_LABEL]), desc=f'Epoch {epoch + 1}', total=len(self.dataloaders[TRAIN_LABEL])):
             for i, batch in stqdm(enumerate(self.dataloaders[TRAIN_LABEL]), desc=f'Epoch {epoch + 1}', total=len(self.dataloaders[TRAIN_LABEL])):
                 loss, logits, labels = self.step(batch)
                 epoch_metrics[loss_label] += loss.item()
@@ -149,10 +93,9 @@ class UMLGPTTrainer:
                 best_test_loss = test_loss
                 self.save_model(f'best_model.pt')
                 print(f'Best model saved at epoch {epoch}')
-                # with st.empty():
-                #     st.write(f'Best model saved at location: {os.path.join(self.models_dir, "best_model.pt")}')
             
             self.results.append({**epoch_metrics, **test_metrics, **unseen_metrics})
+            
             with self.results_container.container():
                 st.subheader(f"## Results")
                 st.dataframe(pd.DataFrame(self.results))
@@ -171,6 +114,7 @@ class UMLGPTTrainer:
         self.model.eval()
         loss_label = f'{split_type}_Loss'
         eval_metrics = {loss_label: 0}
+        # for batch in tqdm(self.dataloaders[split_type], desc=f'Evaluation'):
         for batch in stqdm(self.dataloaders[split_type], desc=f'Evaluation'):
             loss, logits, labels = self.step(batch)
 
@@ -196,7 +140,9 @@ class UMLGPTTrainer:
         attention_mask = batch['attention_mask'].to(DEVICE)
         labels = batch['labels'].to(DEVICE)
 
+        # print(input_ids.shape, attention_mask.shape)
         logits = self.model(input_ids, attention_mask)
+        
         loss = self.model.get_loss(logits, labels)
         return loss, logits, labels
 
@@ -253,10 +199,10 @@ class GNNLinkPredictionTrainer:
         self.args = args
         self.results = list()
         self.st_results = st.empty()
-        # self.results_placeholders = {
-        #     metric: st.empty() for metric in self.results.columns
-        #     if metric not in [EPOCH]
-        # }
+        self.results_placeholders = {
+            metric: st.empty() for metric in self.results.columns
+            if metric not in [EPOCH]
+        }
 
         print("GNN Trainer initialized.")
 
@@ -331,6 +277,7 @@ class GNNLinkPredictionTrainer:
     def run_epochs(self, dataloader, num_epochs):
         max_val_acc = 0
         outputs = list()
+        # for epoch in tqdm(range(num_epochs), desc="Running Epochs"):
         for epoch in stqdm(range(num_epochs), desc="Running Epochs"):
         # for epoch in range(num_epochs):
             train_loss, train_acc = self.train(dataloader)
@@ -354,9 +301,9 @@ class GNNLinkPredictionTrainer:
             self.write_results(outputs)
             self.results.append({EPOCH: epoch, TRAIN_LOSS: train_loss, TEST_LOSS: test_loss, TEST_ACC: test_acc})
 
-            with self.st_results.container():
-                st.subheader(f"## Results")
-                st.dataframe(pd.DataFrame(self.results), hide_index=True)
+            # with self.st_results.container():
+            #     st.subheader(f"## Results")
+            #     st.dataframe(pd.DataFrame(self.results), hide_index=True)
 
 
         print(f"Accuracy: {max_val_acc}")
@@ -377,259 +324,3 @@ class GNNLinkPredictionTrainer:
         with open(os.path.join(self.logs_dir, 'results.txt'), 'a') as f:
             for output in outputs:
                 f.write(f"Epoch {output[EPOCH]} Train Loss: {output[TRAIN_LOSS]} and Test Loss: {output[TEST_LOSS]} and Test Accuracy: {output[TEST_ACC]}\n")
-
-
-def get_uml_gpt(vocab_size, args):
-    """
-        Get the UMLGPT model
-        Args:
-            input_dim: int
-                The input dimension of the model
-            args: Namespace
-                The arguments
-    """
-
-    
-    if args.from_pretrained is not None:
-        uml_gpt = UMLGPT.from_pretrained(args.from_pretrained)
-        print(f'Loaded pretrained model from {args.from_pretrained}')
-    else:
-        embed_dim = args.embed_dim
-        n_layer = args.num_layers
-        n_head = args.num_heads
-        block_size = args.block_size
-        uml_gpt = UMLGPT(vocab_size, embed_dim, block_size, n_layer, n_head)
-    
-    uml_gpt.to(DEVICE)
-    return uml_gpt
-
-
-
-def train_umlgpt(dataset, args):
-    """
-        Train the UMLGPT model
-        Args:
-            dataset: dict
-                The dataset dictionary
-            args: Namespace
-                The arguments
-    """
-    if args.tokenizer_file is not None:
-        tokenizer = pickle.load(open(args.tokenizer_file, 'rb'))
-    
-    elif args.tokenizer == WORD_TOKENIZER:
-        tokenizer = get_tokenizer(WORD_TOKENIZER, dataset)
-        tokenizer.save_pretrained(args.models_dir)
-        print(f"Saved tokenizer at {args.models_dir}")
-    
-    else:
-        tokenizer = get_tokenizer(args.tokenizer)
-
-
-    print("Tokenize dataset...")
-    tokenized_dataset = get_generative_uml_dataset(dataset, tokenizer)
-    print("Done!")
-
-
-    uml_gpt = get_uml_gpt(len(tokenizer), args)
-
-    print("Model initialized! with parameters:")
-    print("Batch size: ", args.batch_size)
-    dataloaders = get_dataloaders(tokenized_dataset, args.batch_size)
-
-    print("Creating dataloaders and trainer...")
-    trainer = UMLGPTTrainer(uml_gpt, dataloaders, args)
-    print("Done!")
-    if args.phase == TRAINING_PHASE:
-        print("Training...")
-        trainer.train(args.num_epochs)
-        trainer.save_model(f'final_model.pt')
-    else:
-        print("Evaluating: ", len(dataloaders[TEST_LABEL].dataset))
-        trainer.evaluate()
-
-
-def train_hugging_face_gpt(data, args):
-    """
-        Train the hugging face GPT model
-        Args:
-            data: dict
-                The data dictionary
-            args: Namespace
-                The arguments
-    """
-
-    results = dict()
-    model_name = args.gpt_model
-    tokenizer = get_pretrained_lm_tokenizer(model_name)
-    model = AutoModelForCausalLM.from_pretrained(model_name)
-    model.resize_token_embeddings(len(tokenizer))
-    if tokenizer.pad_token_id is None:
-        tokenizer.pad_token = tokenizer.eos_token
-        tokenizer.pad_token_id = tokenizer.eos_token_id
-    model.config.pad_token_id = model.config.eos_token_id
-
-    print('Creating dataset...')
-    dataset = get_gpt2_dataset(data, tokenizer)
-    print('Done!')
-
-    data_collator = DataCollatorForLanguageModeling(
-        tokenizer=tokenizer,
-        mlm=False  # Set to True if you want to perform masked language modeling
-    )
-
-
-    training_args = TrainingArguments(
-        output_dir=args.log_dir,          # output directory
-        num_train_epochs=args.num_epochs,              # total number of training epochs
-        per_device_train_batch_size=args.batch_size,   # batch size per device during training
-        per_device_eval_batch_size=args.batch_size,    # batch size for evaluation
-        warmup_steps=500,                # number of warmup steps for learning rate scheduler
-        weight_decay=0.01,               # strength of weight decay
-        logging_dir=args.log_dir,            # directory for storing logs
-        logging_steps=10,
-        save_steps=1000,
-        save_total_limit=1,
-        evaluation_strategy='steps',
-        eval_steps=100,
-        lr_scheduler_type="cosine",
-        load_best_model_at_end=True,
-        metric_for_best_model='eval_loss',
-        # fp16=True,
-        greater_is_better=False
-    )
-
-    trainer = Trainer(
-        model=model,                        
-        args=training_args,                 
-        train_dataset=dataset[TRAIN_LABEL] if args.phase == TRAINING_PHASE else None,
-        eval_dataset=dataset[TEST_LABEL],          # evaluation dataset
-        data_collator=data_collator,
-        tokenizer=tokenizer,
-    )
-
-    suppress_neptune(trainer)
-
-    st_results = st.empty()
-    results = list()
-    if args.phase == TRAINING_PHASE:
-        best_loss = float('inf')
-        for epoch in stqdm(range(args.num_epochs), desc="Training Epoch: "):
-            # trainer.train()
-            # print("Evaluating on test set...")
-            # test_results = trainer.evaluate(dataset[TEST_LABEL])
-            # print(test_results)
-
-            # print("Evaluating on unseen set...")
-            # unseen_results = trainer.evaluate(dataset[UNSEEN_LABEL])
-            # print(unseen_results)
-
-            test_results = {'eval_loss': 0, 'eval_accuracy': 0}
-            unseen_results = {'eval_loss': 0, 'eval_accuracy': 0}
-            
-            if test_results['eval_loss'] < best_loss:
-                best_loss = test_results['eval_loss']
-                with st.spinner("Saving best model..."):
-                    trainer.save_model(args.models_dir)
-            
-            
-            test_results = {f"test_{k}": v for k, v in test_results.items()}
-            unseen_results = {f"unseen_{k}": v for k, v in unseen_results.items()}
-            results.append({**{'Epoch': epoch}, **test_results, **unseen_results})
-
-            with st_results.container():
-                st.markdown(f"### {epoch+1} Results")
-                st.dataframe(pd.DataFrame(results), hide_index=True)
-        
-    else:
-        test_results = {'eval_loss': 0, 'eval_accuracy': 0}
-        # test_results = trainer.evaluate(dataset[TEST_LABEL])
-        results.append({**test_results, **unseen_results})
-
-    with st_results.container():
-        st.markdown(f"## Pretraining Results")
-        st.dataframe(pd.DataFrame(results), hide_index=True)
-
-
-def train_hf_for_classification(dataset, tokenizer, args):
-    """
-        Train the hugging face classification model
-        Args:
-            dataset: dict
-                The dataset dictionary
-            tokenizer: PreTrainedTokenizer
-                The tokenizer
-            args: Namespace
-                The arguments
-    """
-    model_name = args.from_pretrained
-    batch_size = args.batch_size
-    train, test, unseen = dataset[TRAIN_LABEL], dataset[TEST_LABEL], dataset[UNSEEN_LABEL]
-    # Show the training loss with every epoch
-    logging_steps = 100
-    print(f"Using model...{model_name}")
-    model = get_hf_classification_model(model_name, dataset[TRAIN_LABEL].num_classes, tokenizer)
-    model.resize_token_embeddings(len(tokenizer))
-    print("Finetuning model...")
-    training_args = TrainingArguments(
-        output_dir=args.models_dir,
-        overwrite_output_dir=True,
-        evaluation_strategy="epoch",
-        save_strategy="epoch",
-        learning_rate=2e-5,
-        weight_decay=0.01,
-        warmup_steps=100,
-        per_device_train_batch_size=batch_size,
-        per_device_eval_batch_size=batch_size,
-        # fp16=True,
-        logging_steps=logging_steps,
-        num_train_epochs=1,
-        save_total_limit=2,
-        load_best_model_at_end=True,
-    )
-
-    trainer = Trainer(
-        model=model,
-        args=training_args,
-        train_dataset=train,
-        eval_dataset=test,
-        tokenizer=tokenizer,
-        compute_metrics=compute_metrics
-    )
-    for cb in trainer.callback_handler.callbacks:
-        if isinstance(cb, transformers.integrations.NeptuneCallback):
-            trainer.callback_handler.remove_callback(cb)
-
-    best_loss = float('inf')
-    results = list()
-    st_results = st.empty()
-    for epoch in stqdm(range(args.num_epochs), desc="Training Epoch: "):
-        # trainer.train()
-        # print("Evaluating on test set...")
-        # test_results = trainer.evaluate(test)
-        # print(test_results)
-
-        # print("Evaluating on unseen set...")
-        # unseen_results = trainer.evaluate(unseen)
-        # print(unseen_results)
-
-        test_results = {'eval_loss': 0, 'accuracy': 0}
-        unseen_results = {'eval_loss': 0, 'accuracy': 0}
-
-        if test_results['eval_loss'] < best_loss:
-            best_loss = test_results['eval_loss']
-            with st.spinner("Saving best model ..."):
-                trainer.save_model(args.models_dir)
-            
-        
-        test_results = {f"test_{k}": v for k, v in test_results.items()}
-        unseen_results = {f"unseen_{k}": v for k, v in unseen_results.items()}
-        results.append({**{'Epoch': epoch}, **test_results, **unseen_results})
-
-        with st_results.container():
-            st.markdown(f"### Epoch {epoch+1} Results")
-            st.dataframe(pd.DataFrame(results), hide_index=True)
-    
-    with st_results.container():
-        st.markdown(f"### HF Classification {epoch+1} Results")
-        st.dataframe(pd.DataFrame(results), hide_index=True)

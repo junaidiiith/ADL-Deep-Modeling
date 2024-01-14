@@ -6,8 +6,8 @@ from constants import PRETRAINING, \
 from pretraining import main as pretrainer
 from parameters import parse_args
 from constants import gpt_model_names, tokenizer_names
-from pages_utils import set_uploaded_file_path
-from utils import get_plms
+from pages_utils import set_uploaded_file_path, get_plms
+
 
 def validate():
     if graph_file is None:

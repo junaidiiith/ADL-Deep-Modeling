@@ -1,9 +1,9 @@
 from parameters import parse_args
-from ontouml_data_utils import get_graphs_data_kfold, get_triples, get_triples_dataset
-from trainers import get_tokenizer
-from trainers import train_hf_for_classification
+from ontouml_data_generation import get_graphs_data_kfold, get_triples, get_triples_dataset
+from training_utils import get_tokenizer
+from training_utils import train_hf_for_classification
 
-from utils import create_run_config
+from common_utils import create_run_config
 
 
 def pretrained_lm_sequence_classification(data, label_encoder, args):
@@ -43,6 +43,6 @@ def main(args):
         break
 
 
-if __name__ == '__main__':
-    args = parse_args()
-    main(args)
+# if __name__ == '__main__':
+#     args = parse_args()
+#     main(args)

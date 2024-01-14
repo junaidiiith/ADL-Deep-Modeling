@@ -1,5 +1,3 @@
-from git import Tree
-from pages_utils import set_uploaded_file_path
 import streamlit as st
 from uml_classification import main as uml_classification
 from parameters import parse_args
@@ -7,7 +5,7 @@ import json
 import os
 from constants import *
 
-from utils import get_plms
+from pages_utils import set_uploaded_file_path, get_plms
 
 
 def validate():

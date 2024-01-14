@@ -1,8 +1,8 @@
 from parameters import parse_args
-from graph_utils import get_graph_data
-from trainers import train_umlgpt, train_hugging_face_gpt
-from data_generation_utils import get_kfold_lm_data, get_promptized_data_for_generation
-from utils import create_run_config
+from nx2str import get_graph_data
+from training_utils import train_umlgpt, train_hugging_face_gpt
+from uml_data_generation import get_kfold_lm_data, get_promptized_data_for_generation
+from common_utils import create_run_config
 from constants import UMLGPTMODEL
 
 """
@@ -30,6 +30,6 @@ def main(args):
         train_hugging_face_gpt(dataset, args)
 
 
-if __name__ == '__main__':
-    args = parse_args()
-    main(args)
+# if __name__ == '__main__':
+#     args = parse_args()
+#     main(args)
