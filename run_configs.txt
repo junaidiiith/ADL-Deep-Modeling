@@ -2,55 +2,49 @@ All Run Configurations for UML Entity and Supertype classification task
 
 
 ### Pretraining with GPT2
-python pretraining.py --stage=pre --batch_size=128 --num_epochs=1 --lr=0.00001 --data_dir=dataset --log_dir=logs --graphs_file=uploaded_data/combined_graphs_clean.pkl --tokenizer=gpt2 --seed=42 --models_dir=models --gpt_model=gpt2
+python pretraining.py --stage=pre --batch_size=128 --num_epochs=1 --lr=0.00001 --data_dir=dataset --log_dir=logs --graphs_file=uploaded_data/test_data_graphs.pkl --tokenizer=gpt2 --seed=42 --models_dir=models --gpt_model=gpt2 --phase=training
 
 ### Pretrainin with UMLGPT and bert tokenizer
-python pretraining.py --stage=pre --batch_size=128 --num_epochs=1 --lr=0.0001 --data_dir=dataset --log_dir=logs --graphs_file=uploaded_data/combined_graphs_clean.pkl --tokenizer=bert-base-cased --seed=42 --models_dir=models --gpt_model=uml-gpt --embed_dim=128 --num_layers=6 --num_heads=8 --block_size=128 --pooling=mean
+python pretraining.py --stage=pre --batch_size=128 --num_epochs=1 --lr=0.0001 --data_dir=dataset --log_dir=logs --graphs_file=uploaded_data/test_data_graphs.pkl --tokenizer=bert-base-cased --seed=42 --models_dir=models --gpt_model=uml-gpt --embed_dim=128 --num_layers=6 --num_heads=8 --block_size=128 --pooling=mean --phase=training
 
 ### Pretraining with UMLGPT and Word Tokenizer
-python pretraining.py --stage=pre --batch_size=128 --num_epochs=1 --lr=0.0001 --data_dir=dataset --log_dir=logs --graphs_file=uploaded_data/combined_graphs_clean.pkl --tokenizer=word --seed=42 --models_dir=models --gpt_model=uml-gpt --embed_dim=128 --num_layers=6 --num_heads=8 --block_size=128 --pooling=mean
+python pretraining.py --stage=pre --batch_size=128 --num_epochs=1 --lr=0.0001 --data_dir=dataset --log_dir=logs --graphs_file=uploaded_data/test_data_graphs.pkl --tokenizer=word --seed=42 --models_dir=models --gpt_model=uml-gpt --embed_dim=128 --num_layers=6 --num_heads=8 --block_size=128 --pooling=mean --phase=training
 
 
 ### Super Type Classification with Bert
-python uml_classification.py --stage=cls --batch_size=128 --num_epochs=1 --lr=0.00001 --data_dir=dataset --log_dir=logs --graphs_file=uploaded_data/combined_graphs_clean.pkl --classification_model=bert-base-cased --seed=42 --models_dir=models --class_type=super_type --from_pretrained=bert-base-cased
+python uml_classification.py --stage=cls --batch_size=128 --num_epochs=1 --lr=0.00001 --data_dir=dataset --log_dir=logs --graphs_file=uploaded_data/test_data_graphs.pkl --classification_model=bert-base-cased --seed=42 --models_dir=models --class_type=super_type --from_pretrained=bert-base-cased --phase=training
 
 ### Entity Classification with Bert
-python uml_classification.py --stage=cls --batch_size=128 --num_epochs=1 --lr=0.00001 --data_dir=dataset --log_dir=logs --graphs_file=uploaded_data/combined_graphs_clean.pkl --classification_model=bert-base-cased --seed=42 --models_dir=models --class_type=entity --from_pretrained=bert-base-cased
+python uml_classification.py --stage=cls --batch_size=128 --num_epochs=1 --lr=0.00001 --data_dir=dataset --log_dir=logs --graphs_file=uploaded_data/test_data_graphs.pkl --classification_model=bert-base-cased --seed=42 --models_dir=models --class_type=entity --from_pretrained=bert-base-cased --phase=training
 
 
 ### Super Type Classification with Finetuned GPT2
-python uml_classification.py --stage=cls --batch_size=128 --num_epochs=1 --lr=0.00001 --data_dir=dataset --log_dir=logs --graphs_file=uploaded_data/combined_graphs_clean.pkl --classification_model=gpt2 --seed=42 --models_dir=models --class_type=super_type --from_pretrained=models/pre_gpt2
+python uml_classification.py --stage=cls --batch_size=128 --num_epochs=1 --lr=0.00001 --data_dir=dataset --log_dir=logs --graphs_file=uploaded_data/test_data_graphs.pkl --classification_model=gpt2 --seed=42 --models_dir=models --class_type=super_type --from_pretrained=models/pre_gpt2 --phase=training
 
 ### Entity Type Classification with Finetuned GPT2
-python uml_classification.py --stage=cls --batch_size=128 --num_epochs=1 --lr=0.00001 --data_dir=dataset --log_dir=logs --graphs_file=uploaded_data/combined_graphs_clean.pkl --classification_model=gpt2 --seed=42 --models_dir=models --class_type=entity --from_pretrained=models/pre_gpt2
+python uml_classification.py --stage=cls --batch_size=128 --num_epochs=1 --lr=0.00001 --data_dir=dataset --log_dir=logs --graphs_file=uploaded_data/test_data_graphs.pkl --classification_model=gpt2 --seed=42 --models_dir=models --class_type=entity --from_pretrained=models/pre_gpt2 --phase=training
 
 
 ### Super Type Classification with Pretrained UMLGPT and Word Tokenizer
-python uml_classification.py --stage=cls --batch_size=128 --num_epochs=1 --lr=0.0001 --data_dir=dataset --log_dir=logs --graphs_file=uploaded_data/combined_graphs_clean.pkl --classification_model=uml-gpt --tokenizer=word --seed=42 --models_dir=models --class_type=super_type --from_pretrained=models/pre_uml-gpt_tok=word/best_model.pt --tokenizer_file=models/pre_uml-gpt_tok=word/tokenizer.pkl
+python uml_classification.py --stage=cls --batch_size=128 --num_epochs=1 --lr=0.0001 --data_dir=dataset --log_dir=logs --graphs_file=uploaded_data/test_data_graphs.pkl --classification_model=uml-gpt --tokenizer=word --seed=42 --models_dir=models --class_type=super_type --from_pretrained=models/pre_uml-gpt_tok=word/best_model.pt --tokenizer_file=models/pre_uml-gpt_tok=word/tokenizer.pkl --phase=training
 
 ### Entity Type Classification with Pretrained UMLGPT and Word Tokenizer
-python uml_classification.py --stage=cls --batch_size=128 --num_epochs=1 --lr=0.0001 --data_dir=dataset --log_dir=logs --graphs_file=uploaded_data/combined_graphs_clean.pkl --classification_model=uml-gpt --tokenizer=word --seed=42 --models_dir=models --class_type=entity --from_pretrained=models/pre_uml-gpt_tok=word/best_model.pt --tokenizer_file=models/pre_uml-gpt_tok=word/tokenizer.pkl
+python uml_classification.py --stage=cls --batch_size=128 --num_epochs=1 --lr=0.0001 --data_dir=dataset --log_dir=logs --graphs_file=uploaded_data/test_data_graphs.pkl --classification_model=uml-gpt --tokenizer=word --seed=42 --models_dir=models --class_type=entity --from_pretrained=models/pre_uml-gpt_tok=word/best_model.pt --tokenizer_file=models/pre_uml-gpt_tok=word/tokenizer.pkl --phase=training
 
 
 ### Super Type Classification with Pretrained UMLGPT and Bert Tokenizer
-python uml_classification.py --stage=cls --batch_size=128 --num_epochs=1 --lr=0.0001 --data_dir=dataset --log_dir=logs --graphs_file=uploaded_data/combined_graphs_clean.pkl --classification_model=uml-gpt --tokenizer=bert-base-cased --from_pretrained=models/pre_uml-gpt_tok=bert-base-cased/best_model.pt --seed=42 --models_dir=models --class_type=super_type
+python uml_classification.py --stage=cls --batch_size=128 --num_epochs=1 --lr=0.0001 --data_dir=dataset --log_dir=logs --graphs_file=uploaded_data/test_data_graphs.pkl --classification_model=uml-gpt --tokenizer=bert-base-cased --from_pretrained=models/pre_uml-gpt_tok=bert-base-cased/best_model.pt --seed=42 --models_dir=models --class_type=super_type --phase=training
 
 ### Entity Type Classification with Pretrained UMLGPT and Bert Tokenizer
-python uml_classification.py --stage=cls --batch_size=128 --num_epochs=1 --lr=0.0001 --data_dir=dataset --log_dir=logs --graphs_file=uploaded_data/combined_graphs_clean.pkl --classification_model=uml-gpt --tokenizer=bert-base-cased --from_pretrained=models/pre_uml-gpt_tok=bert-base-cased/best_model.pt --seed=42 --models_dir=models --class_type=entity
+python uml_classification.py --stage=cls --batch_size=128 --num_epochs=1 --lr=0.0001 --data_dir=dataset --log_dir=logs --graphs_file=uploaded_data/test_data_graphs.pkl --classification_model=uml-gpt --tokenizer=bert-base-cased --from_pretrained=models/pre_uml-gpt_tok=bert-base-cased/best_model.pt --seed=42 --models_dir=models --class_type=entity --phase=training
 
 
 ### Link Prediction with Pretrained UMLGPT and Word Tokenizer
-python link_prediction.py --stage=lp --batch_size=128 --num_epochs=1 --lr=0.0001 --warmup_steps=100 --data_dir=dataset --log_dir=logs --graphs_file=uploaded_data/combined_graphs_clean.pkl --embedding_model=uml-gpt --tokenizer=word --seed=42 --test_size=0.2 --models_dir=models --embed_dim=128 --num_layers=6 --num_heads=8 --block_size=128 --pooling=mean --from_pretrained=models/pre_uml-gpt_tok=word/best_model.pt --tokenizer_file=models/pre_uml-gpt_tok=word/tokenizer.pkl --weight_decay=0.0001
+python link_prediction.py --stage=lp --batch_size=128 --num_epochs=1 --lr=0.0001 --warmup_steps=100 --data_dir=dataset --log_dir=logs --graphs_file=uploaded_data/test_data_graphs.pkl --embedding_model=uml-gpt --tokenizer=word --seed=42 --test_size=0.2 --models_dir=models --embed_dim=128 --num_layers=3 --block_size=128 --pooling=mean --from_pretrained=models/pre_uml-gpt_tok=word/best_model.pt --tokenizer_file=models/pre_uml-gpt_tok=word/tokenizer.pkl --weight_decay=0.0001 --phase=training
 
 ### Link Prediction with Pretrained UMLGPT and BERT Tokenizer
-python link_prediction.py --stage=lp --batch_size=128 --num_epochs=1 --lr=0.0001 --warmup_steps=100 --data_dir=dataset --log_dir=logs --graphs_file=uploaded_data/combined_graphs_clean.pkl --embedding_model=uml-gpt --tokenizer=bert-base-cased --seed=42 --test_size=0.2 --models_dir=models --embed_dim=128 --num_layers=6 --num_heads=8 --block_size=128 --pooling=mean --from_pretrained=models/pre_uml-gpt_tok=bert-base-cased/best_model.pt --weight_decay=0.0001
+python link_prediction.py --stage=lp --batch_size=128 --num_epochs=1 --lr=0.0001 --warmup_steps=100 --data_dir=dataset --log_dir=logs --graphs_file=uploaded_data/test_data_graphs.pkl --embedding_model=uml-gpt --tokenizer=bert-base-cased --seed=42 --test_size=0.2 --models_dir=models --embed_dim=128 --num_layers=3 --block_size=128 --pooling=mean --from_pretrained=models/pre_uml-gpt_tok=bert-base-cased/best_model.pt --weight_decay=0.0001 --phase=training
 
 ### Link Prediction with Finetuned GPT2
-python link_prediction.py --stage=lp --batch_size=128 --num_epochs=1 --lr=0.0001 --warmup_steps=100 --data_dir=dataset --log_dir=logs --graphs_file=uploaded_data/combined_graphs_clean.pkl --embedding_model=models/pre_gpt2 --tokenizer=models/pre_gpt2 --seed=42 --test_size=0.2 --models_dir=models --embed_dim=128 --num_layers=6 --num_heads=8 --block_size=128 --pooling=mean --weight_decay=0.0001
+python link_prediction.py --stage=lp --batch_size=128 --num_epochs=1 --lr=0.0001 --warmup_steps=100 --data_dir=dataset --log_dir=logs --graphs_file=uploaded_data/test_data_graphs.pkl --embedding_model=models/pre_gpt2 --tokenizer=models/pre_gpt2 --seed=42 --test_size=0.2 --models_dir=models --embed_dim=128 --num_layers=3 --block_size=128 --pooling=mean --weight_decay=0.0001 --phase=training
 
-
-### OntoUML Stereotype Classification BERT - Top 8 classes
-python ontouml_classification.py --stage=ontouml_cls --batch_size=128 --num_epochs=1 --data_dir=uploaded_data/ontouml_test --log_dir=logs --from_pretrained=bert-base-cased --seed=42 --ontouml_mask_prob=0.2 --exclude_limit=-1 --distance=2 --models_dir=models
-
-### OntoUML Stereotype Classification BERT - Top 21 classes
-python ontouml_classification.py --stage=ontouml_cls --batch_size=128 --num_epochs=1 --data_dir=uploaded_data/ontouml_test --log_dir=logs --from_pretrained=bert-base-cased --seed=42 --ontouml_mask_prob=0.2 --exclude_limit=100 --distance=1 --models_dir=models

@@ -8,3 +8,6 @@ torch
 torch_geometric
 transformers
 tensorboard
+stqdm
+streamlit
+accelerate
