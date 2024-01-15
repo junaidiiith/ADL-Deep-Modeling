@@ -1,3 +1,4 @@
+import numpy as np
 import streamlit as st
 from stqdm import stqdm
 import pandas as pd
@@ -128,10 +129,10 @@ class UMLGPTTrainer:
             self.results.append({**train_metrics, **test_metrics, **unseen_metrics})            
             
             with self.results_container.container():
-                st.subheader(f"## Results")
+                st.subheader(f"## Pretraining Results")
                 df = pd.DataFrame(self.results)
                 df.insert(0, EPOCH, range(1, len(df)+1))
-                st.dataframe(df, width=1000, hide_index=True)
+                st.dataframe(df, hide_index=True)
 
 
     def add_metrics(self, eval_metrics, logits, labels, split_type):
@@ -173,3 +174,18 @@ class UMLGPTTrainer:
             for metric in metrics:
                 f.write(f'{metric}: {metrics[metric]:.3f} ')
             f.write('\n')
+
+
+    def get_recommendations(self, n=5):
+        """
+            Get top n predictions for each label
+        """
+        recommendations = dict()
+        for batch in stqdm(self.dataloaders[TEST_LABEL], desc='Getting Recommendations'):
+            _, logits, labels = self.step(batch)
+            logits, labels = logits.detach().cpu().numpy(), labels.detach().cpu().numpy()
+            n_predictions = np.argsort(logits, axis=1)[:, -n:]
+            for label, predictions in zip(labels, n_predictions):
+                recommendations[label] = predictions.tolist()
+        
+        return recommendations

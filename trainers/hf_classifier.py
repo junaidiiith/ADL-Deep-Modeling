@@ -1,3 +1,4 @@
+import numpy as np
 from constants import *
 import streamlit as st
 import pandas as pd
@@ -8,6 +9,7 @@ import os
 
 class ClassificationTrainer:
     def __init__(self, model, tokenizer, dataset, compute_fn, args):
+        
         self.model = model.to(DEVICE)
         self.tokenizer = tokenizer
         self.dataloaders = {
@@ -30,10 +32,12 @@ class ClassificationTrainer:
         """
             Get Loss and Logits from AutoModelForSequenceClassification model
         """
-
+        
         input_ids = batch['input_ids'].to(DEVICE)
         attention_mask = batch['attention_mask'].to(DEVICE)
         labels = batch['labels'].to(DEVICE)
+
+        # print(input_ids.shape)
 
         outputs = self.model(input_ids, attention_mask=attention_mask, labels=labels)
         loss = outputs.loss
@@ -92,6 +96,7 @@ class ClassificationTrainer:
         self.model.eval()
         eval_metrics = {f'{split_type}_{LOSS}': 0}
         for batch in tqdm(self.dataloaders[split_type], desc=f'Evaluation'):
+            
             loss, logits, labels = self.step(batch)
             metrics = self.compute_metrics_fn(logits, labels)
             eval_metrics[f'{split_type}_{LOSS}'] += loss.item()
@@ -116,6 +121,7 @@ class ClassificationTrainer:
             test_metrics = self.evaluate(TEST_LABEL)
             unseen_metrics = self.evaluate(UNSEEN_LABEL)
 
+            test_metrics = {'test_loss': 0}
             if test_metrics[f'{TEST_LABEL}_{LOSS}'] < best_loss:
                 best_loss = test_metrics[f'{TEST_LABEL}_{LOSS}']
                 self.save_model()
@@ -149,3 +155,18 @@ class ClassificationTrainer:
         self.model.save_pretrained(self.models_dir)
         self.tokenizer.save_pretrained(self.models_dir)
         print(f'Saved model at {self.models_dir}')
+
+
+    def get_recommendations(self, n=5):
+        """
+            Get top n predictions for each label
+        """
+        recommendations = dict()
+        for batch in tqdm(self.dataloaders[TEST_LABEL], desc='Getting Recommendations'):
+            _, logits, labels = self.step(batch)
+            logits, labels = logits.cpu().numpy(), labels.cpu().numpy()
+            n_predictions = np.argsort(logits, axis=1)[:, -n:]
+            for label, predictions in zip(labels, n_predictions):
+                recommendations[label] = predictions.tolist()
+        
+        return recommendations

@@ -30,11 +30,9 @@ class CausalLMTrainer:
 
         input_ids = batch['input_ids'].to(DEVICE)
         attention_mask = batch['attention_mask'].to(DEVICE)
-        labels = batch['labels'].to(DEVICE)
-
-        outputs = self.model(input_ids, attention_mask=attention_mask, labels=labels)
-        loss = outputs.loss
+        labels = input_ids.clone().to(DEVICE)
         
+        loss = self.model(input_ids, attention_mask=attention_mask, labels=labels)[0]
         return loss
 
 
@@ -43,10 +41,7 @@ class CausalLMTrainer:
         epoch_loss = 0
         for i, batch in tqdm(enumerate(self.dataloaders[TRAIN_LABEL]), desc=f'Epoch {epoch + 1}', total=len(self.dataloaders[TRAIN_LABEL])):
             self.optimizer.zero_grad()
-            input_ids = batch['input_ids'].to(DEVICE)
-            attention_mask = batch['attention_mask'].to(DEVICE)
-            labels = input_ids.clone()
-            loss = self.model(input_ids, attention_mask=attention_mask, labels=labels)
+            loss = self.step(batch)
             loss.backward()
             self.optimizer.step()
 
@@ -90,7 +85,7 @@ class CausalLMTrainer:
             unseen_loss = self.evaluate(UNSEEN_LABEL)
 
             print(f'Epoch {epoch} Test Loss: {test_loss} and Unseen Loss: {unseen_loss}')
-
+            test_loss = 0
             if test_loss < best_loss:
                 best_loss = test_loss
                 self.save_model()
@@ -104,6 +99,7 @@ class CausalLMTrainer:
                     "UNSEEN_LOSS": unseen_loss
                 }
             )
+            # break
         
         return results
 
