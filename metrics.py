@@ -2,6 +2,7 @@ import numpy as np
 import torch
 import math
 from sklearn.metrics import roc_auc_score
+from constants import DEVICE
 
 
 def get_recommendation_metrics(logits, labels):
@@ -16,7 +17,7 @@ def get_recommendation_metrics(logits, labels):
     
     ## Check if logits and labels are numpy arrays
     if not isinstance(logits, np.ndarray):
-        print(logits.shape, labels.shape, labels)
+        # print(logits.shape, labels.shape, labels)
         logits = logits.cpu().detach().numpy()
         labels = labels.cpu().detach().numpy()
 
@@ -126,6 +127,13 @@ def compute_auc(pos_score, neg_score):
     labels = torch.cat(
         [torch.ones(pos_score.shape[0]), torch.zeros(neg_score.shape[0])]).cpu().detach().numpy()
     return roc_auc_score(labels, scores)
+
+
+def compute_loss(pos_score, neg_score):
+    scores = torch.cat([pos_score, neg_score]).to(DEVICE)
+    labels = torch.cat([torch.ones(pos_score.shape[0]), torch.zeros(neg_score.shape[0])]).to(DEVICE)
+    return torch.nn.BCEWithLogitsLoss()(scores.float(), labels.float())
+
 
 
 def get_eval_stats(eval_result):

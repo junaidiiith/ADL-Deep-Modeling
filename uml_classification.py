@@ -9,7 +9,7 @@ from uml_data_generation import get_kfold_lm_data
 from uml_data_generation import get_classification_dataset
 from uml_data_generation import get_dataloaders
 from models import UMLGPTClassifier
-from trainers import UMLGPTTrainer
+from trainers.umlgpt import UMLGPTTrainer
 from metrics import get_recommendation_metrics
 from training_utils import get_tokenizer
 from training_utils import train_hf_for_classification

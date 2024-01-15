@@ -11,7 +11,7 @@ from link_prediction_dataset import LinkPredictionDataset
 from dgl.dataloading import GraphDataLoader
 import dgl
 from models import GNNModel, MLPPredictor
-from trainers import GNNLinkPredictionTrainer
+from trainers.link_prediction import GNNLinkPredictionTrainer
 from constants import *
 
 def collate_graphs(graphs):

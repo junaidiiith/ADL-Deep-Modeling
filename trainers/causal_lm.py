@@ -18,7 +18,7 @@ class CausalLMTrainer:
         self.optimizer = torch.optim.AdamW(self.model.parameters(), lr=2e-5)
         self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(self.optimizer, T_max=args.num_epochs)
         self.models_dir = args.models_dir
-        self.results_dir = args.results_dir
+        self.results_dir = args.log_dir
         self.results = list()
         self.results_container = st.empty()
 

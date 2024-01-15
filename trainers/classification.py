@@ -21,7 +21,7 @@ class ClassificationTrainer:
         self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(self.optimizer, T_max=args.num_epochs)
         self.compute_metrics_fn = compute_fn
         self.models_dir = args.models_dir
-        self.results_dir = args.results_dir
+        self.results_dir = args.log_dir
         self.results = list()
         self.results_container = st.empty()
 

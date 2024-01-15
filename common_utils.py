@@ -55,10 +55,10 @@ def create_run_config(args):
 
     elif args.stage == UML_CLASSIFICATION:
         if args.classification_model not in [UMLGPTMODEL]:
-            file_name += f"fp_{config[FROM_PRETRAINED].split(os.sep)[-2]}"
+            file_name += f"fp_{config[FROM_PRETRAINED].split(os.sep)[-2] if os.sep in config[FROM_PRETRAINED] else config[FROM_PRETRAINED]}"
         else:
             if config[FROM_PRETRAINED] is not None:
-                file_name += f"fp_{config[FROM_PRETRAINED].split(os.sep)[-2]}"
+                file_name += f"fp_{config[FROM_PRETRAINED].split(os.sep)[-2] if os.sep in config[FROM_PRETRAINED] else config[FROM_PRETRAINED]}"
             else:
                 file_name += f"{config[CLASSIFICATION_MODEL]}"
 
@@ -72,7 +72,7 @@ def create_run_config(args):
     
     elif args.stage == ONTOML_CLS:
         if config[FROM_PRETRAINED] is not None and args.phase == INFERENCE_PHASE:
-            file_name += f"_fp_{config[FROM_PRETRAINED].split(os.sep)[-2]}"
+            file_name += f"fp_{config[FROM_PRETRAINED].split(os.sep)[-2] if os.sep in config[FROM_PRETRAINED] else config[FROM_PRETRAINED]}"
         file_name += f"_distance={args.distance}"
         file_name += f"_distance={args.exclude_limit}"
 

@@ -1,7 +1,7 @@
-from pages_utils import set_uploaded_file_path
+from pages_input_processing import unzip_ecore_models
 import os
 import json
-from pages_utils import get_plms
+from pages_input_processing import get_plms
 import streamlit as st
 from link_prediction import main as link_prediction
 from parameters import parse_args
@@ -111,6 +111,6 @@ graphs_file = st.file_uploader("Graph Pickle File", type=['pkl', 'gpickle', 'pic
 start_lp = st.button('Start Link Prediction Training', on_click=run_validator)
 args.stage = LINK_PREDICTION
 if start_lp:
-    set_uploaded_file_path(args, graphs_file)
+    unzip_ecore_models(graphs_file, args)
     link_prediction(args)
     st.balloons()

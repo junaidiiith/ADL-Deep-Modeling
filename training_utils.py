@@ -1,5 +1,4 @@
 from constants import *
-from stqdm import stqdm
 import pandas as pd
 import streamlit as st
 
@@ -16,9 +15,11 @@ from transformers import \
     AutoModelForSequenceClassification, \
     AutoModelForCausalLM
 
-from trainers import UMLGPTTrainer
+from trainers.umlgpt import UMLGPTTrainer
 from metrics import get_recommendation_metrics
-from trainers import HFClassificationTrainer, HFCausalLMTrainer
+from trainers.causal_lm import CausalLMTrainer
+from trainers.classification import ClassificationTrainer
+
 
 
 def get_uml_gpt(vocab_size, args):
@@ -152,7 +153,7 @@ def train_hugging_face_gpt(data, args):
     dataset = get_gpt2_dataset(data, tokenizer)
     print('Done!')
 
-    trainer = HFCausalLMTrainer(model, tokenizer, dataset, args)
+    trainer = CausalLMTrainer(model, tokenizer, dataset, args)
     if args.phase == TRAINING_PHASE:
         trainer.train(args.num_epochs)
         trainer.save_model()
@@ -178,7 +179,7 @@ def train_hf_for_classification(dataset, tokenizer, args):
     model = get_hf_classification_model(model_name, dataset[TRAIN_LABEL].num_classes, tokenizer)
     model.resize_token_embeddings(len(tokenizer))
     
-    trainer = HFClassificationTrainer(model, tokenizer, dataset, get_recommendation_metrics, args)
+    trainer = ClassificationTrainer(model, tokenizer, dataset, get_recommendation_metrics, args)
     if args.phase == TRAINING_PHASE:
         trainer.train(args.num_epochs)
         trainer.save_model()

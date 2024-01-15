@@ -1,3 +1,4 @@
+import shutil
 import streamlit as st
 from uml_classification import main as uml_classification
 from parameters import parse_args
@@ -5,7 +6,7 @@ import json
 import os
 from constants import *
 
-from pages_utils import set_uploaded_file_path, get_plms
+from pages_input_processing import unzip_ecore_models, get_plms
 
 
 def validate():
@@ -122,13 +123,16 @@ if args.phase == TRAINING_PHASE:
                 args.pooling = pooling
 
 # Example file upload
-graph_file = st.file_uploader("Graph Pickle File", type=['pkl', 'gpickle', 'pickle'])
+graph_file = st.file_uploader("Upload ECore Models", type=['zip'])
 args.stage = UML_CLASSIFICATION
 
 classification_button = st.button(
     f'{"Start Classification Training" if args.phase == TRAINING_PHASE else "Run Classification Inference"}', on_click=validate)
 
 if classification_button:
-    set_uploaded_file_path(args, graph_file)
+    unzip_ecore_models(graph_file, args)
     uml_classification(args)
     st.balloons()
+
+    shutil.rmtree(os.path.join(args.data_dir, graph_file.name.split('.')[0]))
+

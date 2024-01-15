@@ -74,29 +74,6 @@ def create_nx_from_ecore(file_name):
                     pass
         
     return nxg
-
-def get_graphs_from_zip_file(zip_file_name):
-    """
-    This function first unzips the file 
-    and the gets all the files recursively from the unzipped directory.
-    Get only the files that end with .ecore extension
-    """
-
-    all_files = list()
-    with ZipFile(zip_file_name, 'r') as zip:
-        zip.extractall()
-        for root, _, files in os.walk("./"):
-            for file in files:
-                if file.endswith(".ecore"):
-                    all_files.append(os.path.join(root, file))
-    
-    graphs = get_graph_from_files(all_files)
-    ### Delete the unzipped files
-    if isinstance(zip_file_name, str):
-        shutil.rmtree(zip_file_name.split(os.sep)[-1].split(".")[0])
-    else:
-        shutil.rmtree(zip_file_name.name.split(os.sep)[-1].split(".")[0])
-    return graphs
         
 
 def get_graph_from_files(file_names):
