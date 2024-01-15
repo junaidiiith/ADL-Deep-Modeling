@@ -47,7 +47,7 @@ def parse_args():
     parser.add_argument("--lr", type=float)
     parser.add_argument("--warmup_steps", type=int)
     parser.add_argument("--weight_decay", type=float)
-    parser.add_argument("--data_dir", type=str, default="dataset")
+    parser.add_argument("--data_dir", type=str, default="uploaded_data")
     parser.add_argument("--log_dir", type=str, default="logs")
     parser.add_argument("--graphs_file", type=str)
     parser.add_argument("--classification_model", type=str)

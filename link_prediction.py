@@ -7,7 +7,7 @@ from common_utils import create_run_config
 from models import UMLGPT
 from transformers import AutoModel
 from training_utils import get_tokenizer
-from datasets import LinkPredictionDataset
+from link_prediction_dataset import LinkPredictionDataset
 from dgl.dataloading import GraphDataLoader
 import dgl
 from models import GNNModel, MLPPredictor
@@ -130,10 +130,11 @@ def main(args):
     create_run_config(args)
     graph_data = get_graph_data(args.graphs_file)
     for i, graphs in enumerate(get_kfold_lp_data(graph_data, phase=args.phase)):
+        
+        print("Running fold:", i)
+        train_link_prediction(graphs, args)
+        ### Comment the break statement to train on all the folds
         break
-    
-    train_link_prediction(graphs, args)
-
 
 # if __name__ == '__main__':
 #     args = parse_args()

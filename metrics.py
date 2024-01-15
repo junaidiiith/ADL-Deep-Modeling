@@ -16,6 +16,7 @@ def get_recommendation_metrics(logits, labels):
     
     ## Check if logits and labels are numpy arrays
     if not isinstance(logits, np.ndarray):
+        print(logits.shape, labels.shape, labels)
         logits = logits.cpu().detach().numpy()
         labels = labels.cpu().detach().numpy()
 

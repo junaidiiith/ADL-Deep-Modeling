@@ -11,6 +11,7 @@ TEST_ACC = 'Test Accuracy'
 TRAIN_LABEL = 'train'
 TEST_LABEL = 'test'
 UNSEEN_LABEL = 'unseen'
+LOSS = 'loss'
 
 EVAL_LOSS = 'eval_loss'
 

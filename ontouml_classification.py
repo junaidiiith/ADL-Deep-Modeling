@@ -28,6 +28,7 @@ def pretrained_lm_sequence_classification(data, label_encoder, args):
 def main(args):
     create_run_config(args)
     for i, (seen_graphs, unseen_graphs, label_encoder) in enumerate(get_graphs_data_kfold(args)):
+        print("Running fold:", i)
         print(len(seen_graphs), len(unseen_graphs), len(label_encoder))
         train_triples_seen = get_triples(seen_graphs, distance=args.distance, train=True)
         test_triples_seen = get_triples(seen_graphs, distance=args.distance, train=False)
@@ -40,9 +41,11 @@ def main(args):
         }
 
         pretrained_lm_sequence_classification(data, label_encoder, args)
+        
+        ### Comment the break statement to train on all the folds
         break
 
 
-# if __name__ == '__main__':
-#     args = parse_args()
-#     main(args)
+if __name__ == '__main__':
+    args = parse_args()
+    main(args)

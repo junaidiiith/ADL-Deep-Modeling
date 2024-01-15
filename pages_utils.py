@@ -3,11 +3,11 @@ import os
 
 
 def set_uploaded_file_path(args, graph_file):
-    args.graphs_file = os.path.join(args.data_dir, graph_file.name)
+    args.graphs_file = os.path.join(args.uploaded_data_dir, graph_file.name)
     
     if not os.path.exists(args.graphs_file):
         graphs = pickle.loads(graph_file.getvalue())
-        with open(args.data_dir, graph_file.name, 'wb') as f:
+        with open(args.graphs_file, 'wb') as f:
             pickle.dump(graphs, f)
     
 

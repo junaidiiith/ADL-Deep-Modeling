@@ -9,7 +9,12 @@ from stqdm import stqdm
 import os
 import torch.nn as nn
 import itertools
-from training_utils import compute_loss
+
+
+def compute_loss(pos_score, neg_score):
+    scores = torch.cat([pos_score, neg_score]).to(DEVICE)
+    labels = torch.cat([torch.ones(pos_score.shape[0]), torch.zeros(neg_score.shape[0])]).to(DEVICE)
+    return torch.nn.BCEWithLogitsLoss()(scores.float(), labels.float())
 
 
 class UMLGPTTrainer:
@@ -40,99 +45,6 @@ class UMLGPTTrainer:
         self.compute_metrics_fn = compute_metrics_fn
         self.results = list()
         self.results_container = st.empty()
-        
-    
-    def train(self, epochs):
-        self.model.train()
-
-        # for epoch in tqdm(range(epochs), desc='Training GPT'):            
-        for epoch in stqdm(range(epochs), desc='Training GPT'):
-            best_test_loss = float('inf')
-            loss_label = f'{TRAIN_LABEL}_Loss'
-            epoch_metrics = {EPOCH: int(f'{epoch+1}'), loss_label: 0}
-            # for i, batch in tqdm(enumerate(self.dataloaders[TRAIN_LABEL]), desc=f'Epoch {epoch + 1}', total=len(self.dataloaders[TRAIN_LABEL])):
-            for i, batch in stqdm(enumerate(self.dataloaders[TRAIN_LABEL]), desc=f'Epoch {epoch + 1}', total=len(self.dataloaders[TRAIN_LABEL])):
-                loss, logits, labels = self.step(batch)
-                epoch_metrics[loss_label] += loss.item()
-
-                if self.compute_metrics_fn is not None:
-                    metrics = self.compute_metrics_fn(logits, labels)
-                    for metric in metrics:
-                        if metric not in epoch_metrics:
-                            epoch_metrics[metric] = 0
-                        epoch_metrics[metric] += metrics[metric]
-                
-
-                ### Gradient Clipping
-                # This is to prevent exploding gradients
-                torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
-                loss.backward()
-                self.optimizer.step()
-                # self.scheduler.step()
-                self.optimizer.zero_grad()
-
-                if i % 100 == 0:
-                    print(f'Epoch {epoch} Batch {i} Avg Loss: {epoch_metrics[loss_label] / (i + 1)}')
-
-                break
-
-            self.scheduler.step()
-            for metric in epoch_metrics:
-                epoch_metrics[metric] /= len(self.dataloaders[TRAIN_LABEL])
-            
-            self.write_metrics(epoch_metrics, epoch, TRAIN_LABEL)
-
-            test_metrics = self.evaluate()
-            self.write_metrics(test_metrics, epoch, TEST_LABEL)
-
-            unseen_metrics = self.evaluate(UNSEEN_LABEL)
-            self.write_metrics(unseen_metrics, epoch, UNSEEN_LABEL)
-            
-            test_loss = test_metrics[f'{TEST_LABEL}_Loss']
-            if test_loss < best_test_loss:
-                best_test_loss = test_loss
-                self.save_model(f'best_model.pt')
-                print(f'Best model saved at epoch {epoch}')
-            
-            self.results.append({**epoch_metrics, **test_metrics, **unseen_metrics})
-            
-            with self.results_container.container():
-                st.subheader(f"## Results")
-                st.dataframe(pd.DataFrame(self.results))
-            
-
-                
-    def evaluate(self, split_type=TEST_LABEL):
-        """
-            Evaluate the model on the test set
-            Args:
-                epoch: int
-                    The current epoch number
-                split_type: str
-                    The split type to evaluate on
-        """
-        self.model.eval()
-        loss_label = f'{split_type}_Loss'
-        eval_metrics = {loss_label: 0}
-        # for batch in tqdm(self.dataloaders[split_type], desc=f'Evaluation'):
-        for batch in stqdm(self.dataloaders[split_type], desc=f'Evaluation'):
-            loss, logits, labels = self.step(batch)
-
-            if self.compute_metrics_fn is not None:
-                metrics = self.compute_metrics_fn(logits, labels)
-                for metric in metrics:
-                    if metric not in eval_metrics:
-                        eval_metrics[metric] = 0
-                    eval_metrics[metric] += metrics[metric]
-
-            eval_metrics[loss_label] += loss.item()
-
-        # print("EVM:", eval_metrics)
-        for metric in eval_metrics:
-            eval_metrics[metric] /= len(self.dataloaders[split_type])
-        # print("EVM:", eval_metrics)
-
-        return eval_metrics
     
 
     def step(self, batch):
@@ -147,6 +59,103 @@ class UMLGPTTrainer:
         return loss, logits, labels
 
 
+    def train_epoch(self, epoch):
+        self.model.train()
+        loss_label = f'{TRAIN_LABEL}_loss'
+        epoch_metrics = {loss_label: 0}
+        # for i, batch in tqdm(enumerate(self.dataloaders[TRAIN_LABEL]), desc=f'Epoch {epoch + 1}', total=len(self.dataloaders[TRAIN_LABEL])):
+        for i, batch in stqdm(enumerate(self.dataloaders[TRAIN_LABEL]), desc=f'Epoch {epoch + 1}', total=len(self.dataloaders[TRAIN_LABEL])):
+            loss, _, _ = self.step(batch)
+            epoch_metrics[loss_label] += loss.item()
+
+            # self.add_metrics(epoch_metrics, logits, labels, TRAIN_LABEL)
+            
+
+            ### Gradient Clipping to prevent exploding gradients
+            torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
+            loss.backward()
+            self.optimizer.step()
+            # self.scheduler.step()
+            self.optimizer.zero_grad()
+
+            if i % 100 == 0:
+                print(f'Epoch {epoch} Batch {i} Avg Loss: {epoch_metrics[loss_label] / (i + 1)}')
+
+            break
+
+        self.scheduler.step()
+        for metric in epoch_metrics:
+            epoch_metrics[metric] /= len(self.dataloaders[TRAIN_LABEL])
+        
+        return epoch_metrics
+
+
+    def evaluate(self, split_type=TEST_LABEL):
+        """
+            Evaluate the model on the test set
+            Args:
+                epoch: int
+                    The current epoch number
+                split_type: str
+                    The split type to evaluate on
+        """
+        self.model.eval()
+        loss_label = f'{split_type}_loss'
+        eval_metrics = {loss_label: 0}
+        # for batch in tqdm(self.dataloaders[split_type], desc=f'Evaluation'):
+        for batch in stqdm(self.dataloaders[split_type], desc=f'Evaluation'):
+            loss, logits, labels = self.step(batch)
+            eval_metrics[loss_label] += loss.item()
+            
+            self.add_metrics(eval_metrics, logits, labels, split_type)
+            
+
+        for metric in eval_metrics:
+            eval_metrics[metric] /= len(self.dataloaders[split_type])
+        
+
+        return eval_metrics
+
+
+    def train(self, epochs):
+        best_test_loss = float('inf')
+        for epoch in stqdm(range(epochs), desc='Training GPT'):
+            train_metrics = self.train_epoch(epoch)
+            self.write_metrics(train_metrics, epoch, TRAIN_LABEL)
+
+            test_metrics = self.evaluate()
+            self.write_metrics(test_metrics, epoch, TEST_LABEL)
+
+            unseen_metrics = self.evaluate(UNSEEN_LABEL)
+            self.write_metrics(unseen_metrics, epoch, UNSEEN_LABEL)
+            
+            test_loss = test_metrics[f'{TEST_LABEL}_{LOSS}']
+            if test_loss < best_test_loss:
+                best_test_loss = test_loss
+                self.save_model(f'best_model.pt')
+                print(f'Best model saved at epoch {epoch}')
+            
+            self.results.append({**train_metrics, **test_metrics, **unseen_metrics})            
+            
+            with self.results_container.container():
+                st.subheader(f"## Results")
+                df = pd.DataFrame(self.results)
+                df.insert(0, EPOCH, range(1, len(df)+1))
+                st.dataframe(df, width=1000, hide_index=True)
+
+
+    def add_metrics(self, eval_metrics, logits, labels, split_type):
+        
+        if self.compute_metrics_fn is not None:
+            metrics = self.compute_metrics_fn(logits, labels)
+            for metric in metrics:
+                metric_label = f'{split_type}_{metric}'
+                if metric not in eval_metrics:
+                    eval_metrics[metric_label] = 0
+                eval_metrics[metric_label] += metrics[metric]
+        
+        
+
     def save_model(self, file_name):
         if not os.path.exists(self.models_dir):
             os.makedirs(self.models_dir)
@@ -155,6 +164,7 @@ class UMLGPTTrainer:
         torch.save(self.model.state_dict(), file_name)
         print(f'Saved model at {file_name}')
     
+
     def load_model(self, file_name):
         file_name = os.path.join(self.models_dir, file_name)
         self.model.load_state_dict(torch.load(file_name))
@@ -173,8 +183,242 @@ class UMLGPTTrainer:
             for metric in metrics:
                 f.write(f'{metric}: {metrics[metric]:.3f} ')
             f.write('\n')
+    
                 
+class HFClassificationTrainer:
+    def __init__(self, model, tokenizer, dataset, compute_fn, args):
+        self.model = model.to(DEVICE)
+        self.tokenizer = tokenizer
+        self.dataloaders = {
+            split_type: torch.utils.data.DataLoader(
+                dataset[split_type], 
+                batch_size=args.batch_size, 
+                shuffle=args.phase == TRAINING_PHASE,
+            ) for split_type in dataset
+        }
+        self.optimizer = torch.optim.AdamW(self.model.parameters(), lr=2e-5)
+        self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(self.optimizer, T_max=args.num_epochs)
+        self.compute_metrics_fn = compute_fn
+        self.models_dir = args.models_dir
+
+    def step(self, batch):
+        """
+            Get Loss and Logits from AutoModelForSequenceClassification model
+        """
+
+        input_ids = batch['input_ids'].to(DEVICE)
+        attention_mask = batch['attention_mask'].to(DEVICE)
+        labels = batch['labels'].to(DEVICE)
+
+        outputs = self.model(input_ids, attention_mask=attention_mask, labels=labels)
+        loss = outputs.loss
+        logits = outputs.logits
+
+        return loss, logits, labels
+
+
+    def train_epoch(self, epoch):
+        self.model.train()
+        epoch_metrics = {f'{TRAIN_LABEL}_{LOSS}': 0}
+        for i, batch in tqdm(enumerate(self.dataloaders[TRAIN_LABEL]), desc=f'Epoch {epoch + 1}', total=len(self.dataloaders[TRAIN_LABEL])):
+            loss, logits, labels = self.step(batch)
+            epoch_metrics[f'{TRAIN_LABEL}_{LOSS}'] += loss.item()
+            metrics = self.compute_metrics_fn(logits, labels)
+            for metric in metrics:
+                metric_label = f'{TRAIN_LABEL}_{metric}'
+                if metric_label not in epoch_metrics:
+                    epoch_metrics[metric_label] = 0
+                epoch_metrics[metric_label] += metrics[metric]
+
             
+
+            ### Gradient Clipping to prevent exploding gradients
+            # torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
+            loss.backward()
+            self.optimizer.step()
+            self.scheduler.step()
+            self.optimizer.zero_grad()
+
+            if i % 100 == 0:
+                print(f'Epoch {epoch} Batch {i} Avg Loss: {epoch_metrics[f"{TRAIN_LABEL}_{LOSS}"] / (i + 1)}')
+                test_metrics = self.evaluate()
+                unseen_metrics = self.evaluate(UNSEEN_LABEL)
+                print(f'Epoch {epoch} Test Metrics: ', end='')
+                for metric in test_metrics:
+                    print(f'{metric}: {test_metrics[metric]:.3f}', end=' ')
+                print()
+                print(f'Epoch {epoch} Unseen Metrics: ', end='')
+                for metric in unseen_metrics:
+                    print(f'{metric}: {unseen_metrics[metric]:.3f}', end=' ')
+                print()
+
+        for metric in epoch_metrics:
+            epoch_metrics[metric] /= len(self.dataloaders[TRAIN_LABEL])
+        
+        return epoch_metrics
+    
+    def evaluate(self, split_type=TEST_LABEL):
+        """
+            Evaluate the model on the test set
+            Args:
+                epoch: int
+                    The current epoch number
+                split_type: str
+                    The split type to evaluate on
+        """
+        self.model.eval()
+        eval_metrics = {f'{split_type}_{LOSS}': 0}
+        for batch in tqdm(self.dataloaders[split_type], desc=f'Evaluation'):
+            loss, logits, labels = self.step(batch)
+            metrics = self.compute_metrics_fn(logits, labels)
+            eval_metrics[f'{split_type}_{LOSS}'] += loss.item()
+
+            for metric in metrics:
+                metric_label = f'{split_type}_{metric}'
+                if metric_label not in eval_metrics:
+                    eval_metrics[metric_label] = 0
+                eval_metrics[metric_label] += metrics[metric]
+            
+            
+
+        for metric in eval_metrics:
+            eval_metrics[metric] /= len(self.dataloaders[split_type])
+        
+
+        return eval_metrics
+    
+
+    def train(self, num_epochs):
+        for epoch in range(num_epochs):
+            train_metrics = self.train_epoch(epoch)
+            test_metrics = self.evaluate(TEST_LABEL)
+            unseen_metrics = self.evaluate(UNSEEN_LABEL)
+
+            metrics = {**train_metrics, **test_metrics, **unseen_metrics}
+            print(f'Epoch {epoch} Metrics: ', end='')
+            for metric in metrics:
+                print(f'{metric}: {metrics[metric]:.3f}', end=' ')
+            print()
+        
+
+    def save_model(self):
+        if not os.path.exists(self.models_dir):
+            os.makedirs(self.models_dir)
+
+        self.model.save_pretrained(self.models_dir)
+        self.tokenizer.save_pretrained(self.models_dir)
+        print(f'Saved model at {self.models_dir}')
+    
+
+class HFCausalLMTrainer:
+    def __init__(self, model, tokenizer, dataset, args):
+        self.model = model.to(DEVICE)
+        self.tokenizer = tokenizer
+        self.dataloaders = {
+            split_type: torch.utils.data.DataLoader(
+                dataset[split_type], 
+                batch_size=args.batch_size, 
+                shuffle=args.phase == TRAINING_PHASE,
+            ) for split_type in dataset
+        }
+        self.optimizer = torch.optim.AdamW(self.model.parameters(), lr=2e-5)
+        self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(self.optimizer, T_max=args.num_epochs)
+        self.models_dir = args.models_dir
+
+
+    def step(self, batch):
+        """
+            Get Loss and Logits from AutoModelForSequenceClassification model
+        """
+
+        input_ids = batch['input_ids'].to(DEVICE)
+        attention_mask = batch['attention_mask'].to(DEVICE)
+        labels = batch['labels'].to(DEVICE)
+
+        outputs = self.model(input_ids, attention_mask=attention_mask, labels=labels)
+        loss = outputs.loss
+        
+        return loss
+
+
+    def train_epoch(self, epoch):
+        self.model.train()
+        epoch_loss = 0
+        for i, batch in tqdm(enumerate(self.dataloaders[TRAIN_LABEL]), desc=f'Epoch {epoch + 1}', total=len(self.dataloaders[TRAIN_LABEL])):
+            self.optimizer.zero_grad()
+            input_ids = batch['input_ids'].to(DEVICE)
+            attention_mask = batch['attention_mask'].to(DEVICE)
+            labels = input_ids.clone()
+            loss = self.model(input_ids, attention_mask=attention_mask, labels=labels)
+            loss.backward()
+            self.optimizer.step()
+
+            epoch_loss += loss.item()
+
+            if i % 100 == 0:
+                print(f'Epoch {epoch} Batch {i} Avg Loss: {epoch_loss / (i + 1)}')
+                test_loss = self.evaluate(TEST_LABEL)
+                unseen_loss = self.evaluate(UNSEEN_LABEL)
+                print(f'Epoch {epoch} Test Loss: {test_loss} and Unseen Loss: {unseen_loss}')
+            
+        return epoch_loss / len(self.dataloaders[TRAIN_LABEL])
+    
+    
+    def evaluate(self, split_type=TEST_LABEL):
+        """
+            Evaluate the model on the test set
+            Args:
+                epoch: int
+                    The current epoch number
+                split_type: str
+                    The split type to evaluate on
+        """
+        self.model.eval()
+        test_loss = 0
+        for batch in tqdm(self.dataloaders[split_type], desc=f'Evaluation'):
+            loss = self.step(batch)
+            test_loss += loss.item()
+
+        test_loss /= len(self.dataloaders[split_type])
+        return test_loss
+            
+    
+    def train(self, num_epochs):
+        results = list()
+        best_loss = float('inf')
+        # for epoch in stqdm(range(num_epochs)):
+        for epoch in tqdm(range(num_epochs)):
+            train_loss = self.train_epoch(epoch)
+            test_loss = self.evaluate(TEST_LABEL)
+            unseen_loss = self.evaluate(UNSEEN_LABEL)
+
+            print(f'Epoch {epoch} Test Loss: {test_loss} and Unseen Loss: {unseen_loss}')
+
+            if test_loss < best_loss:
+                best_loss = test_loss
+                self.save_model(f'best_model.pt')
+                print(f'Best model saved at epoch {epoch}')
+
+            results.append(
+                {
+                    EPOCH: epoch,
+                    "train_loss": train_loss,
+                    "test_loss": test_loss,
+                    "UNSEEN_LOSS": unseen_loss
+                }
+            )
+        
+        return results
+
+    
+    def save_model(self):
+        if not os.path.exists(self.models_dir):
+            os.makedirs(self.models_dir)
+
+        self.model.save_pretrained(self.models_dir)
+        self.tokenizer.save_pretrained(self.models_dir)
+        print(f'Saved model at {self.models_dir}')
+    
 
 class GNNLinkPredictionTrainer:
     """

@@ -1,3 +1,6 @@
+#! Description: This file contains the code for training the UML-GPT model for classification task.
+
+import streamlit as st
 import pickle
 from parameters import parse_args
 from nx2str import get_graph_data
@@ -50,7 +53,8 @@ def train_uml_gpt_classification(data, label_encoder, compute_metrics_fn, args):
     if args.phase == TRAINING_PHASE:
         uml_gpt_trainer.train(args.num_epochs)
     else:
-        uml_gpt_trainer.evaluate()
+        results = uml_gpt_trainer.evaluate()
+        st.dataframe([results], hide_index=True, width=1000)
 
 
 def pretrained_lm_sequence_classification(data, label_encoder, args):
@@ -76,16 +80,18 @@ def main(args):
     graph_data = get_graph_data(args.graphs_file)
     entity_map, super_types_map = graph_data['entities_encoder'], graph_data['super_types_encoder']
     for i, data in enumerate(get_kfold_lm_data(graph_data, seed=args.seed)):
+        print("Running fold:", i)
+        
+        label_encoder = super_types_map if args.class_type == 'super_type' else entity_map
+
+        if args.classification_model in [UMLGPTMODEL]:
+            train_uml_gpt_classification(data, label_encoder, compute_metrics_fn=get_recommendation_metrics, args=args)
+        else:
+            pretrained_lm_sequence_classification(data, label_encoder, args)
+
+        ### Comment the break statement to train on all the folds
         break
-    
-    label_encoder = super_types_map if args.class_type == 'super_type' else entity_map
 
-    if args.classification_model in [UMLGPTMODEL]:
-        train_uml_gpt_classification(data, label_encoder, compute_metrics_fn=get_recommendation_metrics, args=args)
-    else:
-        pretrained_lm_sequence_classification(data, label_encoder, args)
-
-
-if __name__ == '__main__':
-    args = parse_args()
-    main(args)
+# if __name__ == '__main__':
+#     args = parse_args()
+#     main(args)

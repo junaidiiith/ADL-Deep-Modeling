@@ -3,7 +3,7 @@ import torch_geometric
 import torch.nn as nn
 
 
-device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+from constants import DEVICE
 
 
 def weights_init(model):
@@ -255,7 +255,7 @@ class UMLGPT(nn.Module):
     
     @staticmethod
     def from_pretrained(state_dict_pth):
-        state_dict = torch.load(state_dict_pth, map_location=device)
+        state_dict = torch.load(state_dict_pth, map_location=DEVICE)
         vocab_size, embed_dim = [s.shape for _, s in state_dict.items() if 'token_embedding_table' in _][0]
         num_heads = max([int(name.split('.sa.heads.')[1].split('.')[0]) for name, s in state_dict.items() if '.sa.heads.' in name]) + 1
         block_size = [s.shape[0] for _, s in state_dict.items() if 'position_embedding_table' in _][0]
@@ -296,8 +296,8 @@ class UMLGPTClassifier(nn.Module):
         return logits
     
     def get_loss(self, logits, labels):
-        logits = logits.to(device)
-        labels = labels.to(device)
+        logits = logits.to(DEVICE)
+        labels = labels.to(DEVICE)
 
         if len(labels.shape) == 1:
             loss_fct = torch.nn.CrossEntropyLoss()

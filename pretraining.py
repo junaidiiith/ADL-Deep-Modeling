@@ -17,18 +17,20 @@ def main(args):
 
     graph_data = get_graph_data(args.graphs_file)
     for _, data in enumerate(get_kfold_lm_data(graph_data, seed=args.seed, phase=args.phase)):
+        print("Running fold:", _)
+
+        print("Creating dataset...")
+        dataset = get_promptized_data_for_generation(data)
+
+        print("Initializing...", dataset.keys())
+        # print(dataset['test'][0])
+        if args.gpt_model == UMLGPTMODEL:
+            train_umlgpt(dataset, args)
+        else:
+            train_hugging_face_gpt(dataset, args)
+
+        ### Comment the break statement to train on all the folds
         break
-    
-    print("Creating dataset...")
-    dataset = get_promptized_data_for_generation(data)
-
-    print("Initializing...", dataset.keys())
-    # print(dataset['test'][0])
-    if args.gpt_model == UMLGPTMODEL:
-        train_umlgpt(dataset, args)
-    else:
-        train_hugging_face_gpt(dataset, args)
-
 
 # if __name__ == '__main__':
 #     args = parse_args()

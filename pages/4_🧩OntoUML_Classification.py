@@ -8,6 +8,8 @@ from parameters import parse_args
 from constants import stereotype_classification_model_names as model_names
 
 
+STEREOTYPE_CLASSIFICATION_REPO = 'models/stereotype_classification'
+
 def validate():
     if args.data_dir is None:
         st.error("Please upload a graph file")
@@ -36,10 +38,18 @@ with c1:
 with c2:
     ontouml_mask_prob = st.slider('OntoUML Mask Probability', min_value=0.1, max_value=0.6, step=0.1, value=0.2)
 
-model_name = st.selectbox('Classification Model', list(model_names.keys()))
 
-if model_name:
-    args.from_pretrained = model_names[model_name]
+if args.phase == TRAINING_PHASE:
+    model_name = st.selectbox('Classification Model', list(model_names.keys()))
+
+    if model_name:
+        args.from_pretrained = model_names[model_name]
+
+else:
+    model_name = st.selectbox('Classification Model', list(os.listdir(STEREOTYPE_CLASSIFICATION_REPO)))
+
+    if model_name:
+        args.from_pretrained = os.path.join(STEREOTYPE_CLASSIFICATION_REPO, model_name)
 
 if args.phase == TRAINING_PHASE:
     st.markdown("Training Parameters")
@@ -55,7 +65,6 @@ args.exclude_limit = exclude_limit
 args.ontouml_mask_prob = ontouml_mask_prob
 
 
-
 start_stereotyping_button = st.button(
     f'{"Start Stereotype Classification Training" if args.phase else "Start Stereotype Classification Inference"}', on_click=validate)
 if start_stereotyping_button:
@@ -64,6 +73,7 @@ if start_stereotyping_button:
     with ZipFile(data_dir, 'r') as zip:
         zip.extractall('uploaded_data')
         args.data_dir = data_dir_name
+    
     ontouml_classification(args)
 
     shutil.rmtree(data_dir_name)

@@ -1,16 +1,15 @@
-from datasets import \
+from uml_datasets import \
     UMLNodeDataset, \
     EncodingsDataset, \
     GenerativeUMLDataset
     
-import dgl
 from sklearn.model_selection import StratifiedKFold
 from torch.utils.data import DataLoader
 import torch
 import numpy as np
 from constants import *
 from common_utils import clean_text
-from training_utils import get_encoding_size
+from tokenization import get_encoding_size
 
 
 """
@@ -250,62 +249,6 @@ def get_gpt2_dataset(data, tokenizer):
     return dataset
 
 
-def get_pos_neg_graphs(nxg, tr=0.2):
-
-    """
-    ``get_pos_neg_graphs`` function returns the positive and negative graphs for the given graph
-    There are train positive, train negative, test positive and test negative graphs
-    train positive graph is the graph with masked edges removed and only positive edges
-    train negative graph is the graph with masked edges removed and only negative edges
-    test positive graph is the graph with masked edges and only positive edges
-    test negative graph is the graph with masked edges and only negative edges
-
-    tr: test size
-
-    positive edges are the actual edges in the graph
-    negative edges are the edges that are not in the graph
-
-    The edges are masked for testing the link prediction model
-    The edges are masked by setting the 'masked' attribute of the edge to True
-    The edges are unmasked by setting the 'masked' attribute of the edge to False
-    """
-
-
-    g = dgl.from_networkx(nxg, edge_attrs=['masked'])
-    u, v = g.edges()
-    test_mask = torch.where(g.edata['masked'])[0]
-    train_mask = torch.where(~g.edata['masked'])[0]
-    test_size = int(g.number_of_edges() * tr)
-    test_pos_u, test_pos_v = u[test_mask], v[test_mask]
-    train_pos_u, train_pos_v = u[train_mask], v[train_mask]
-
-    # Find all negative edges and split them for training and testing
-    adj = g.adjacency_matrix()
-    adj_neg = 1 - adj.to_dense() - np.eye(g.number_of_nodes())
-    neg_u, neg_v = np.where(adj_neg != 0)
-
-    neg_eids = np.random.choice(len(neg_u), g.number_of_edges())
-    test_neg_u, test_neg_v = neg_u[neg_eids[:test_size]], neg_v[neg_eids[:test_size]]
-    train_neg_u, train_neg_v = neg_u[neg_eids[test_size:]], neg_v[neg_eids[test_size:]]
-
-    train_g = dgl.remove_edges(g, test_mask)
-
-    train_pos_g = dgl.graph((train_pos_u, train_pos_v), num_nodes=g.number_of_nodes())
-    train_neg_g = dgl.graph((train_neg_u, train_neg_v), num_nodes=g.number_of_nodes())
-
-    test_pos_g = dgl.graph((test_pos_u, test_pos_v), num_nodes=g.number_of_nodes())
-    test_neg_g = dgl.graph((test_neg_u, test_neg_v), num_nodes=g.number_of_nodes())
-    
-    graphs = {
-        'train_pos_g': train_pos_g,
-        'train_neg_g': train_neg_g,
-        'test_pos_g': test_pos_g,
-        'test_neg_g': test_neg_g,
-        'train_g': train_g
-    }
-    return graphs
-
-
 def get_kfold_lm_data(data, seed=42, test_size=0.1, phase=TRAINING_PHASE):
     """
     ``get_kfold_lm_data`` function returns a generator of k-fold data for the generative task
@@ -346,11 +289,11 @@ def get_kfold_lm_data(data, seed=42, test_size=0.1, phase=TRAINING_PHASE):
         yield data
 
 
-def get_kfold_lp_data(data, seed=42, test_size=0.1, phase='train'):
+def get_kfold_lp_data(data, seed=42, test_size=0.2, phase='train'):
     """
     ``get_kfold_lp_data`` function returns a generator of k-fold data for the link prediction task
     seen_graphs are the all the graphs that are considered available for training a link prediction model
-        out of which 90% is used for training and 10% is used for validation
+        out of which 80% is used for training and 20% is used for validation
 
     unseen_graphs are the all the graphs that are considered unavailable for training a link prediction model
         and are used for testing the link prediction model

@@ -12,7 +12,7 @@ from tqdm.auto import tqdm
 from collections import deque
 import re
 import itertools
-from datasets import EncodingsDataset
+from uml_datasets import EncodingsDataset
 from uml_data_generation import get_encoding_size
 
 
