@@ -18,7 +18,7 @@ from transformers import \
 from trainers.umlgpt import UMLGPTTrainer
 from metrics import get_recommendation_metrics
 from trainers.causal_lm import CausalLMTrainer
-from trainers.classification import ClassificationTrainer
+from trainers.hf_classifier import ClassificationTrainer
 
 
 
@@ -125,7 +125,7 @@ def train_umlgpt(dataset, args):
         print("Evaluating: ", len(dataloaders[TEST_LABEL].dataset))
         eval_results = trainer.evaluate()
         print(eval_results)
-        st.dataframe(pd.DataFrame([eval_results]), width=1000, hide_index=True)
+        st.dataframe(pd.DataFrame([eval_results]), hide_index=True)
 
     
 
@@ -159,32 +159,9 @@ def train_hugging_face_gpt(data, args):
         trainer.save_model()
     else:
         results = trainer.evaluate()
-        st.dataframe([results], hide_index=True, width=1000)
+        st.dataframe([results], hide_index=True)
 
 
 
-def train_hf_for_classification(dataset, tokenizer, args):
-    """
-        Train the hugging face classification model
-        Args:
-            dataset: dict
-                The dataset dictionary
-            tokenizer: PreTrainedTokenizer
-                The tokenizer
-            args: Namespace
-                The arguments
-    """
-    model_name = args.from_pretrained
-    print(f"Using model...{model_name}")
-    model = get_hf_classification_model(model_name, dataset[TRAIN_LABEL].num_classes, tokenizer)
-    model.resize_token_embeddings(len(tokenizer))
-    
-    trainer = ClassificationTrainer(model, tokenizer, dataset, get_recommendation_metrics, args)
-    if args.phase == TRAINING_PHASE:
-        trainer.train(args.num_epochs)
-        trainer.save_model()
-    
-    else:
-        results = trainer.evaluate()
-        st.dataframe([results], hide_index=True, width=1000)
+        
     

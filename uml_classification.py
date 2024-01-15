@@ -1,10 +1,12 @@
 #! Description: This file contains the code for training the UML-GPT model for classification task.
 
+import pandas as pd
 import streamlit as st
 import pickle
 from parameters import parse_args
 from nx2str import get_graph_data
-from training_utils import get_uml_gpt
+from trainers.hf_classifier import ClassificationTrainer
+from training_utils import get_hf_classification_model, get_uml_gpt
 from uml_data_generation import get_kfold_lm_data
 from uml_data_generation import get_classification_dataset
 from uml_data_generation import get_dataloaders
@@ -12,8 +14,7 @@ from models import UMLGPTClassifier
 from trainers.umlgpt import UMLGPTTrainer
 from metrics import get_recommendation_metrics
 from training_utils import get_tokenizer
-from training_utils import train_hf_for_classification
-from constants import TRAINING_PHASE, UMLGPTMODEL, WORD_TOKENIZER
+from constants import TRAIN_LABEL, TRAINING_PHASE, UMLGPTMODEL, WORD_TOKENIZER, INFERENCE_PHASE
 
 from common_utils import create_run_config
 
@@ -54,7 +55,19 @@ def train_uml_gpt_classification(data, label_encoder, compute_metrics_fn, args):
         uml_gpt_trainer.train(args.num_epochs)
     else:
         results = uml_gpt_trainer.evaluate()
-        st.dataframe([results], hide_index=True, width=1000)
+        st.dataframe([results], hide_index=True)
+
+    
+    if args.phase == INFERENCE_PHASE:
+        inverse_label_encoder = {v: k for k, v in label_encoder.items()}
+        recommendations = uml_gpt_trainer.get_recommendations()
+        recommendations = {inverse_label_encoder[k]: [inverse_label_encoder[v] for v in recommendations[k]] for k in recommendations}
+        df = pd.DataFrame(recommendations.items(), columns=[f'Class', 'Recommendations'])
+        df.insert(0, '#', range(1, len(df)+1))
+        with st.empty():
+            st.write("Recommendations")
+            st.dataframe(df, height=500, hide_index=True)
+
 
 
 def pretrained_lm_sequence_classification(data, label_encoder, args):
@@ -71,11 +84,34 @@ def pretrained_lm_sequence_classification(data, label_encoder, args):
     """
     tokenizer = get_tokenizer(args.from_pretrained)
     dataset = get_classification_dataset(data, tokenizer, label_encoder, args.class_type)
-    train_hf_for_classification(dataset, tokenizer, args)
+    dataset[TRAIN_LABEL].num_classes = len(label_encoder)
+
+    model = get_hf_classification_model(
+        args.from_pretrained, dataset[TRAIN_LABEL].num_classes, tokenizer)
+
+    trainer = ClassificationTrainer(model, tokenizer, dataset, get_recommendation_metrics, args)
+
+    if args.phase == TRAINING_PHASE:
+        trainer.train(args.num_epochs)
+        trainer.save_model()    
+    else:
+        results = trainer.evaluate()
+        st.dataframe([results], hide_index=True)
+
+
+    if args.phase == INFERENCE_PHASE:
+        recommendations = trainer.get_recommendations()
+        recommendations = {label_encoder[k]: [label_encoder[v] for v in recommendations[k]] for k in recommendations}
+
+        with st.empty():
+            st.write("Recommendations")
+            for label in recommendations:
+                st.write(f"{label}: {recommendations[label]}")
 
 
 def main(args):
     create_run_config(args)
+    # exit(0)
     # st.json(config)
     graph_data = get_graph_data(args.graphs_file)
     entity_map, super_types_map = graph_data['entities_encoder'], graph_data['super_types_encoder']

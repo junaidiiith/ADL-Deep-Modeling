@@ -6,11 +6,11 @@ import json
 import os
 from constants import *
 
-from pages_input_processing import unzip_ecore_models, get_plms
+from pages_input_processing import unzip_models, get_plms
 
 
 def validate():
-    if graph_file is None:
+    if models_file is None:
         st.error("Please upload a graph file")
 
     return True
@@ -41,10 +41,10 @@ st.markdown("""## UML Class and Supertype Prediction""")
 
 args.phase = phase_mapping[st.radio('Execution Phase', options=list(phase_mapping.keys()))]
 
-if args.phase == INFERENCE_PHASE:
-    available_classification_models = [GPT2_LABEL, UMLGPT_LABEL]
-else:
-    available_classification_models = list(uml_plm_names.keys())
+# if args.phase == INFERENCE_PHASE:
+#     available_classification_models = [GPT2_LABEL, UMLGPT_LABEL]
+# else:
+available_classification_models = list(uml_plm_names.keys())
 
 classification_model = uml_plm_names[st.selectbox('Classification Model', available_classification_models)]
 args.classification_model = classification_model
@@ -55,6 +55,7 @@ if classification_model == UMLGPTMODEL:
         pretrained = st.toggle('Use Pretrained Model?', value=False)
     else:
         pretrained = True
+
     if pretrained:
         plms = get_plms(args.models_dir, PRETRAINING, classification_model)
         plm_dir = st.selectbox('Pretrained Model', plms)
@@ -70,10 +71,14 @@ else:
         fine_tuned = True
 
     if fine_tuned:
-        if not classification_model in [UMLGPTMODEL, 'gpt2']:
-            st.error("Fine Tuned Model is only available for UMLGPT and gpt2")
+        # if not classification_model in [UMLGPTMODEL, 'gpt2']:
+        #     st.error("Fine Tuned Model is only available for UMLGPT and gpt2")
 
         plms = get_plms(args.models_dir, PRETRAINING, classification_model)
+        plms += get_plms(args.models_dir, UML_CLASSIFICATION, classification_model)
+        if len(plms) == 0:
+            st.error("No Fine Tuned Model Available for this model")
+
         plm_dir = os.path.join(args.models_dir, st.selectbox('Pretrained HF Model', plms))
         args.from_pretrained = plm_dir
     else:
@@ -83,15 +88,13 @@ else:
 classification_type = st.selectbox('Classification Type', classification_types.keys())
 args.class_type = classification_types[classification_type]
 
+args.batch_size = st.slider('Batch Size', min_value=16, max_value=128, value=32, step=16)
 
 
 if args.phase == TRAINING_PHASE:
     st.markdown("Training Parameters")
-    c1, c2, c3 = st.columns(3)
-    with c1:
-        batch_size = st.slider('Batch Size', min_value=16, max_value=128, value=32, step=16)
-        args.batch_size = batch_size
-
+    c2, c3 = st.columns(2)
+    
     with c2:
         num_epochs = st.text_input('Number of Epochs', value='10')
         args.num_epochs = int(num_epochs)
@@ -123,16 +126,17 @@ if args.phase == TRAINING_PHASE:
                 args.pooling = pooling
 
 # Example file upload
-graph_file = st.file_uploader("Upload ECore Models", type=['zip'])
+models_file = st.file_uploader("Upload ECore Models", type=['zip', 'ecore'])
 args.stage = UML_CLASSIFICATION
 
 classification_button = st.button(
     f'{"Start Classification Training" if args.phase == TRAINING_PHASE else "Run Classification Inference"}', on_click=validate)
 
 if classification_button:
-    unzip_ecore_models(graph_file, args)
+    unzip_models(models_file, 'ecore', args)
+
     uml_classification(args)
     st.balloons()
 
-    shutil.rmtree(os.path.join(args.data_dir, graph_file.name.split('.')[0]))
+    shutil.rmtree(args.graphs_file)
 

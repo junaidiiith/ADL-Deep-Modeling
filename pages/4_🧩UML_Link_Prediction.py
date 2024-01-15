@@ -1,4 +1,5 @@
-from pages_input_processing import unzip_ecore_models
+import shutil
+from pages_input_processing import unzip_models
 import os
 import json
 from pages_input_processing import get_plms
@@ -111,6 +112,8 @@ graphs_file = st.file_uploader("Graph Pickle File", type=['pkl', 'gpickle', 'pic
 start_lp = st.button('Start Link Prediction Training', on_click=run_validator)
 args.stage = LINK_PREDICTION
 if start_lp:
-    unzip_ecore_models(graphs_file, args)
+    unzip_models(graphs_file, args)
     link_prediction(args)
     st.balloons()
+
+    shutil.rmtree(args.graphs_file)

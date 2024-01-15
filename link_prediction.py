@@ -11,7 +11,7 @@ from link_prediction_dataset import LinkPredictionDataset
 from dgl.dataloading import GraphDataLoader
 import dgl
 from models import GNNModel, MLPPredictor
-from trainers.link_prediction import GNNLinkPredictionTrainer
+from trainers.link_predictor import GNNLinkPredictionTrainer
 from constants import *
 
 def collate_graphs(graphs):
@@ -128,6 +128,8 @@ def main(args):
         It then trains the link prediction task
     """
     create_run_config(args)
+    # exit(0)
+
     graph_data = get_graph_data(args.graphs_file)
     for i, graphs in enumerate(get_kfold_lp_data(graph_data, phase=args.phase)):
         

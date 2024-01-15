@@ -1,10 +1,13 @@
+import pandas as pd
+import streamlit as st
 from parameters import parse_args
 from ontouml_data_generation import get_graphs_data_kfold, get_triples, get_triples_dataset
+from training_utils import get_hf_classification_model
+from trainers.hf_classifier import ClassificationTrainer
 from training_utils import get_tokenizer
-from training_utils import train_hf_for_classification
-
+from metrics import get_recommendation_metrics
 from common_utils import create_run_config
-
+from constants import TRAIN_LABEL, TRAINING_PHASE, INFERENCE_PHASE
 
 def pretrained_lm_sequence_classification(data, label_encoder, args):
 
@@ -21,12 +24,35 @@ def pretrained_lm_sequence_classification(data, label_encoder, args):
 
     tokenizer = get_tokenizer(args.from_pretrained, special_tokens=[])
     dataset = {split_type: get_triples_dataset(data[split_type], label_encoder, tokenizer) for split_type in data}
-    dataset['train'].num_classes = len(label_encoder)
-    train_hf_for_classification(dataset, tokenizer, args)
+    dataset[TRAIN_LABEL].num_classes = len(label_encoder)
+
+        
+    model = get_hf_classification_model(args.from_pretrained, dataset[TRAIN_LABEL].num_classes, tokenizer)
+    
+    trainer = ClassificationTrainer(model, tokenizer, dataset, get_recommendation_metrics, args)
+
+    if args.phase == TRAINING_PHASE:
+        trainer.train(args.num_epochs)
+        trainer.save_model()    
+    else:
+        results = trainer.evaluate()
+        st.dataframe([results], hide_index=True)
+
+    if args.phase == INFERENCE_PHASE:
+        inverse_label_encoder = {v: k for k, v in label_encoder.items()}
+        recommendations = trainer.get_recommendations()
+        recommendations = {inverse_label_encoder[k]: [inverse_label_encoder[v] for v in recommendations[k]] for k in recommendations}
+        df = pd.DataFrame(recommendations.items(), columns=[f'Class', 'Recommendations'], index=False)
+        df.insert(0, '#', range(1, len(df)+1))
+        with st.empty().container():
+            st.write("Recommendations")
+            st.dataframe(df, height=500, hide_index=True)
 
 
 def main(args):
     create_run_config(args)
+    # exit(0)
+
     for i, (seen_graphs, unseen_graphs, label_encoder) in enumerate(get_graphs_data_kfold(args)):
         print("Running fold:", i)
         print(len(seen_graphs), len(unseen_graphs), len(label_encoder))

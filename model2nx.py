@@ -1,6 +1,5 @@
+import fnmatch
 import pickle
-import shutil
-from zipfile import ZipFile
 from pyecore.resources import ResourceSet, URI
 import networkx as nx
 
@@ -8,7 +7,18 @@ import os
 import networkx as nx
 from stqdm import stqdm
 
-ecore_data = "umlEcore"
+
+
+def find_files_with_extension(root_dir, extension):
+    matching_files = []
+
+    # Recursively search for files with the specified extension
+    for root, _, files in os.walk(root_dir):
+        for filename in fnmatch.filter(files, f'*.{extension}'):
+            matching_files.append(os.path.join(root, filename))
+
+    return matching_files
+
 
 def get_attributes(classifier):
     all_feats = set((feat.name, feat.eType.name) for feat in classifier.eAllStructuralFeatures() if type(feat).__name__ == 'EAttribute')
@@ -90,7 +100,21 @@ def get_graph_from_files(file_names):
     return graphs
 
 
-def get_graphs_from_dir(models_metadata, dir=None):
+def get_graphs_from_directory(dir):
+    f_name, dir_name = os.path.basename(dir), os.path.dirname(dir)
+    if os.path.exists(os.path.join(dir_name, f_name + "_graphs.pkl")):
+        print("Graphs found in cache!")
+        graphs = pickle.load(open(os.path.join(dir_name, f_name + "_graphs.pkl"), 'rb'))
+    else:
+        file_names = find_files_with_extension(dir, 'ecore')
+        graphs = get_graph_from_files(file_names)
+        pickle.dump(graphs, open(os.path.join(dir_name, f_name + "_graphs.pkl"), 'wb'))
+    
+    return graphs
+
+
+
+def get_graphs_from_metadata(models_metadata, dir=None):
     graphs = list()
     models = models_metadata if dir is None else [os.path.join(dir, model) for model in models_metadata.keys()]
     graphs = get_graph_from_files(models)

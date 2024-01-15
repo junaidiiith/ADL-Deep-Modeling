@@ -74,7 +74,7 @@ def create_run_config(args):
         if config[FROM_PRETRAINED] is not None and args.phase == INFERENCE_PHASE:
             file_name += f"fp_{config[FROM_PRETRAINED].split(os.sep)[-2] if os.sep in config[FROM_PRETRAINED] else config[FROM_PRETRAINED]}"
         file_name += f"_distance={args.distance}"
-        file_name += f"_distance={args.exclude_limit}"
+        file_name += f"_el={args.exclude_limit}"
 
     
     os.makedirs(os.path.join(args.log_dir, file_name), exist_ok=True)

@@ -5,7 +5,7 @@ import random
 from sklearn.model_selection import train_test_split
 from tqdm.auto import tqdm
 from common_utils import clean_text
-
+from model2nx import get_graphs_from_directory
 
 edge_name = lambda g, edge: g.edges[edge]['name'] if 'name' in g.edges[edge] else ''
 
@@ -110,7 +110,7 @@ def get_node_triples_from_graphs(graphs):
     return remove_duplicates(triples)
 
 
-def get_graphs(graphs_file):
+def get_graphs_from_dir(graphs_file):
     graphs_file_dir = os.path.dirname(graphs_file)
     graphs_file_name = os.path.basename(graphs_file).split('.')[0]
     graphs = pickle.load(open(graphs_file, 'rb'))
@@ -120,7 +120,7 @@ def get_graphs(graphs_file):
 
 def get_graph_data(graphs_file, seed=42):
     """
-        Take a pickle file containing a list of graphs
+        Takes a list of graphs
         Split the graphs into train and test
         Adds node connections to the graphs i.e., references and super types
         Get node triples from the graphs i.e., (node, references, super types)
@@ -142,8 +142,9 @@ def get_graph_data(graphs_file, seed=42):
             super_types_encoder: dictionary mapping super types to integers
 
     """
-
-    graphs, node_triples_file = get_graphs(graphs_file)
+    graphs = get_graphs_from_directory(graphs_file)
+    dir_name = os.path.dirname(graphs_file)
+    node_triples_file = os.path.join(dir_name, os.path.basename(graphs_file) + '_node_triples.pkl')
 
     if os.path.exists(node_triples_file):
         data = pickle.load(open(node_triples_file, 'rb'))

@@ -254,7 +254,7 @@ def has_neighbours_incl_incoming(graph, node):
 
 
 def get_graphs_data_kfold(args):
-    ontology_graphs = get_ontouml_to_nx(args.data_dir)
+    ontology_graphs = get_ontouml_to_nx(args.graphs_file)
     label_encoder = get_label_encoder(ontology_graphs, args.exclude_limit)
     stereotypes_classes = list(label_encoder.keys())
     X = [1]*len(ontology_graphs)

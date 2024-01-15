@@ -5,12 +5,12 @@ from constants import ONTOML_CLS, TRAINING_PHASE, phase_mapping
 from ontouml_classification import main as ontouml_classification
 from parameters import parse_args
 from constants import stereotype_classification_model_names as model_names
-from pages_input_processing import unzip_ontouml_models
+from pages_input_processing import unzip_models
 
 STEREOTYPE_CLASSIFICATION_REPO = 'models/stereotype_classification'
 
 def validate():
-    if args.data_dir is None:
+    if args.graphs_file is None:
         st.error("Please upload a graph file")
 
     return True
@@ -57,7 +57,7 @@ if args.phase == TRAINING_PHASE:
 args.batch_size = st.slider('Batch Size', min_value=16, max_value=128, value=32, step=16)
 
 
-data_zip_file = st.file_uploader("Upload OntoUML Models", type=['zip'])
+models_file = st.file_uploader("Upload OntoUML Models", type=['zip', 'json'])
 
 args.distance = distance
 args.exclude_limit = exclude_limit
@@ -69,8 +69,9 @@ start_stereotyping_button = st.button(
 
 if start_stereotyping_button:
     args.stage = ONTOML_CLS
-    unzip_ontouml_models(data_zip_file, args)
+    unzip_models(models_file, 'json', args)
     ontouml_classification(args)
 
-    shutil.rmtree(args.data_dir)
     st.balloons()
+
+    shutil.rmtree(args.graphs_file)

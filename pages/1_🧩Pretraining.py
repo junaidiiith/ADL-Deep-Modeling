@@ -1,12 +1,13 @@
 import json
 import os
+import shutil
 import streamlit as st
 from constants import PRETRAINING, \
     TRAINING_PHASE, UMLGPTMODEL, WORD_TOKENIZER, phase_mapping
 from pretraining import main as pretrainer
 from parameters import parse_args
 from constants import gpt_model_names, tokenizer_names
-from pages_input_processing import unzip_ecore_models, get_plms
+from pages_input_processing import unzip_models, get_plms
 
 
 def validate():
@@ -111,6 +112,8 @@ start_button = st.button(
     f'{"Start Pretraining" if args.phase == TRAINING_PHASE else "Run Inference"}', on_click=validate
 )
 if start_button:
-    unzip_ecore_models(graph_file, args)
+    unzip_models(graph_file, 'ecore', args)
     pretrainer(args)
     st.balloons()
+
+    shutil.rmtree(args.graphs_file)
