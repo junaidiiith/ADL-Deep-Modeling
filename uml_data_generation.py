@@ -167,7 +167,8 @@ def get_classification_dataset(data, tokenizer, encoder, class_type):
 
     dataset = {
         split_type: UMLNodeDataset(
-            promptized_data[split_type], tokenizer, encoder) for split_type in promptized_data
+            promptized_data[split_type], tokenizer, encoder) for split_type in promptized_data\
+            if len(promptized_data[split_type]) > 0
     }
     return dataset
 
@@ -289,7 +290,7 @@ def get_kfold_lm_data(data, seed=42, test_size=0.1, phase=TRAINING_PHASE):
         yield data
 
 
-def get_kfold_lp_data(data, seed=42, test_size=0.2, phase='train'):
+def get_kfold_lp_data(data, seed=42, test_size=0.2, phase='training'):
     """
     ``get_kfold_lp_data`` function returns a generator of k-fold data for the link prediction task
     seen_graphs are the all the graphs that are considered available for training a link prediction model

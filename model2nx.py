@@ -49,6 +49,8 @@ def get_ecore_data(file_name):
 
 
 def create_nx_from_ecore(file_name):
+    print("Creating graph for: ", file_name)
+    count = 0
     try:
         model_root = get_model_root(file_name)
     except Exception as e:
@@ -70,6 +72,7 @@ def create_nx_from_ecore(file_name):
                 if not nxg.has_node(supertype.name):
                     nxg.add_node(supertype.name, type='class')
                 nxg.add_edge(classifier.name, supertype.name, type='generalization')
+                count += 1
             
             for reference in classifier.eReferences:
                 try:
@@ -79,10 +82,29 @@ def create_nx_from_ecore(file_name):
                                 type='reference' if reference.containment else 'association'
                         )
                 except Exception as e:
-                    # print("ref", reference)
-                    # raise(e)
                     pass
-        
+    
+
+    for node in list(nxg.nodes()):
+        if 'type' not in nxg.nodes[node]:
+            nxg.remove_node(node)
+    
+    
+    if all([nxg.nodes[node]['type'] == 'class' for node in nxg.nodes()]):
+        print("Total nodes: ", nxg.number_of_nodes())
+    
+    if all([nxg.edges[edge]['type'] in ['generalization', 'association', 'reference'] for edge in nxg.edges()]):
+        print("Total edges: ", nxg.number_of_edges())
+    
+    try:
+        assert all(['type' in nxg.edges[edge] for edge in nxg.edges()])
+    except AssertionError as e:
+        print("Error in creating graph")
+        exit(0)
+    
+    gen_edges = sum(1 for edge in nxg.edges() if nxg.edges[edge]['type']  == 'generalization')
+    print("3 Total generalization edges: ", gen_edges)
+
     return nxg
         
 
@@ -90,25 +112,27 @@ def get_graph_from_files(file_names):
     graphs = list()
     count = 0
     for file_name in stqdm(file_names, desc="Creating Ecore Graphs"):
-        try:
-            graph = create_nx_from_ecore(file_name)
-            if graph is not None:
-                graphs.append(graph)
-        except Exception as e:
-            count += 1
+        graph = create_nx_from_ecore(file_name)
+
+        if graph is not None:
+            graphs.append((file_name, graph))
+            
     print("Total files that could not be parsed: ", count)
+    print("Total graphs: ", len(graphs))
     return graphs
 
 
 def get_graphs_from_directory(dir):
     f_name, dir_name = os.path.basename(dir), os.path.dirname(dir)
-    if os.path.exists(os.path.join(dir_name, f_name + "_graphs.pkl")):
+    graph_pickle_file_name = os.path.join(dir_name, f_name + "_graphs.pkl")
+    print("Graph pickle", graph_pickle_file_name)
+    if os.path.exists(graph_pickle_file_name):
         print("Graphs found in cache!")
         graphs = pickle.load(open(os.path.join(dir_name, f_name + "_graphs.pkl"), 'rb'))
     else:
         file_names = find_files_with_extension(dir, 'ecore')
         graphs = get_graph_from_files(file_names)
-        pickle.dump(graphs, open(os.path.join(dir_name, f_name + "_graphs.pkl"), 'wb'))
+        pickle.dump(graphs, open(graph_pickle_file_name, 'wb'))
     
     return graphs
 

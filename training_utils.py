@@ -16,40 +16,14 @@ from transformers import \
     AutoModelForCausalLM
 
 from trainers.umlgpt import UMLGPTTrainer
-from metrics import get_recommendation_metrics
 from trainers.causal_lm import CausalLMTrainer
-from trainers.hf_classifier import ClassificationTrainer
 
-
-
-def get_uml_gpt(vocab_size, args):
-    """
-        Get the UMLGPT model
-        Args:
-            input_dim: int
-                The input dimension of the model
-            args: Namespace
-                The arguments
-    """
-
-    
-    if args.from_pretrained is not None:
-        uml_gpt = UMLGPT.from_pretrained(args.from_pretrained)
-        print(f'Loaded pretrained model from {args.from_pretrained}')
-    else:
-        embed_dim = args.embed_dim
-        n_layer = args.num_layers
-        n_head = args.num_heads
-        block_size = args.block_size
-        uml_gpt = UMLGPT(vocab_size, embed_dim, block_size, n_layer, n_head)
-    
-    uml_gpt.to(DEVICE)
-    return uml_gpt
 
 
 def get_tokenizer(tokenizer_name, data=None, special_tokens=SPECIAL_TOKENS):
     if data is None:
-        print("Creating pretrained LM tokenizer...")
+        print("Creating pretrained LM tokenizer...", tokenizer_name)
+        
         tokenizer = get_pretrained_lm_tokenizer(tokenizer_name, special_tokens=special_tokens)
         print("Done!")
     else:
@@ -75,6 +49,7 @@ def get_hf_classification_model(model_name, num_labels, tokenizer):
         model.resize_token_embeddings(len(tokenizer)) 
         model.config.pad_token_id = model.config.eos_token_id
     else:
+        print("Loading BERT from", model_name)
         model = AutoModelForSequenceClassification.from_pretrained(
             pretrained_model_name_or_path=model_name, num_labels=num_labels, ignore_mismatched_sizes=True)
         model.resize_token_embeddings(len(tokenizer))
@@ -108,19 +83,31 @@ def train_umlgpt(dataset, args):
     tokenized_dataset = get_generative_uml_dataset(dataset, tokenizer)
     print("Done!")
 
-    uml_gpt = get_uml_gpt(len(tokenizer), args)
+    if args.from_pretrained is not None:
+        uml_gpt = UMLGPT.from_pretrained(args.from_pretrained)
+        print(f'Loaded pretrained UMLGPT model from {args.from_pretrained}')
+    else:
+        uml_gpt = UMLGPT(
+            vocab_size=len(tokenizer), 
+            embed_dim=args.embed_dim, 
+            block_size=args.block_size,
+            n_layer=args.num_layers, 
+            n_head=args.num_heads
+        )
+        print("Created UMLGPT model")
+
 
     print("Model initialized! with parameters:")
     print("Batch size: ", args.batch_size)
     dataloaders = get_dataloaders(tokenized_dataset, args.batch_size)
-
+    
     print("Creating dataloaders and trainer...")
-    trainer = UMLGPTTrainer(uml_gpt, dataloaders, args)
+    trainer = UMLGPTTrainer(uml_gpt, tokenizer, dataloaders, args)
     print("Done!")
     if args.phase == TRAINING_PHASE:
         print("Training...")
         trainer.train(args.num_epochs)
-        trainer.save_model(f'final_model.pt')
+        trainer.save_model()
     else:
         print("Evaluating: ", len(dataloaders[TEST_LABEL].dataset))
         eval_results = trainer.evaluate()

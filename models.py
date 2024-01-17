@@ -1,3 +1,5 @@
+import json
+import os
 import torch
 import torch_geometric
 import torch.nn as nn
@@ -193,6 +195,7 @@ class UMLGPT(nn.Module):
         
         return loss
     
+    
     def get_embedding(self, x, attention_mask):
         """
         x: [batch_size, seq_len]
@@ -253,6 +256,17 @@ class UMLGPT(nn.Module):
     def __repr__(self):
         return super().__repr__() + f'\nNumber of parameters: {self.get_model_size() / 1000000:.3f}M'
     
+    
+    @property
+    def __name__(self):
+        return 'UMLGPT'
+    
+
+    @property
+    def name_or_path(self):
+        return 'UMLGPT'
+    
+
     @staticmethod
     def from_pretrained(state_dict_pth):
         state_dict = torch.load(state_dict_pth, map_location=DEVICE)
@@ -317,74 +331,138 @@ class UMLGPTClassifier(nn.Module):
         return super().__repr__() + f'\nNumber of parameters: {self.get_model_size()/1000000:.3f}M'
     
     @staticmethod
-    def from_pretrained(state_dict, num_classes):
-        model = UMLGPTClassifier(UMLGPT.from_pretrained(state_dict), num_classes)
+    def from_pretrained(state_dict_path, num_classes, init_classifier=True):
+        if init_classifier:
+            print("Initializing classifier from pretrained model with num classes: ", num_classes)
+            model = UMLGPTClassifier(UMLGPT.from_pretrained(state_dict), num_classes)
+        else:
+            state_dict = torch.load(state_dict_path, map_location=DEVICE)
+            vocab_size, embed_dim = [s.shape for _, s in state_dict.items() if 'token_embedding_table' in _][0]
+            num_heads = max([int(name.split('.sa.heads.')[1].split('.')[0]) for name, s in state_dict.items() if '.sa.heads.' in name]) + 1
+            block_size = [s.shape[0] for _, s in state_dict.items() if 'position_embedding_table' in _][0]
+            num_layers = max([int(name.split('blocks.')[1].split('.')[0]) for name, s in state_dict.items() if 'blocks.' in name]) + 1
+            num_classes = state_dict['classifier.net.2.weight'].shape[0]
+            uml_gpt = UMLGPT(vocab_size, embed_dim, block_size, num_layers, num_heads)
+
+            model = UMLGPTClassifier(uml_gpt, num_classes)
+            model.load_state_dict(state_dict)
+            
         return model
 
 
 class GNNModel(torch.nn.Module):
-  """
-    A general GNN model created using the PyTorch Geometric library
-    model_name: the name of the GNN model
-    input_dim: the input dimension
-    hidden_dim: the hidden dimension
-    out_dim: the output dimension
+    """
+        A general GNN model created using the PyTorch Geometric library
+        model_name: the name of the GNN model
+        input_dim: the input dimension
+        hidden_dim: the hidden dimension
+        out_dim: the output dimension
 
-    num_layers: the number of GNN layers
-    num_heads: the number of heads in the GNN layer
-    residual: whether to use residual connections
-    l_norm: whether to use layer normalization
-    dropout: the dropout probability
-  
-  """
-  def __init__(self, model_name, input_dim, hidden_dim, out_dim, num_layers, num_heads=None, residual=False, l_norm=False, dropout=0.1):
-    super(GNNModel, self).__init__()
-    gnn_model = getattr(torch_geometric.nn, model_name)
-    self.conv_layers = nn.ModuleList()
-    if model_name == 'GINConv':
-        input_layer = gnn_model(nn.Sequential(nn.Linear(input_dim, hidden_dim), nn.ReLU()), train_eps=True)
-    elif num_heads is None:
-        input_layer = gnn_model(input_dim, hidden_dim, aggr='SumAggregation')
-    else:
-        input_layer = gnn_model(input_dim, hidden_dim, heads=num_heads, aggr='SumAggregation')
-    self.conv_layers.append(input_layer)
+        num_layers: the number of GNN layers
+        num_heads: the number of heads in the GNN layer
+        residual: whether to use residual connections
+        l_norm: whether to use layer normalization
+        dropout: the dropout probability
+    
+    """
+    def __init__(self, model_name, input_dim, hidden_dim, out_dim, num_layers, num_heads=None, residual=False, l_norm=False, dropout=0.1):
+        super(GNNModel, self).__init__()
 
-    for _ in range(num_layers - 2):
-        if model_name == 'GINConv':
-            self.conv_layers.append(gnn_model(nn.Sequential(nn.Linear(hidden_dim, hidden_dim), nn.ReLU()), train_eps=True))
-        elif num_heads is None:
-            self.conv_layers.append(gnn_model(hidden_dim, hidden_dim, aggr='SumAggregation'))
-        else:
-            self.conv_layers.append(gnn_model(num_heads*hidden_dim, hidden_dim, heads=num_heads, aggr='SumAggregation'))
-
-    if model_name == 'GINConv':
-        self.conv_layers.append(gnn_model(nn.Sequential(nn.Linear(hidden_dim, out_dim), nn.ReLU()), train_eps=True))
-    else:
-        self.conv_layers.append(gnn_model(hidden_dim if num_heads is None else num_heads*hidden_dim, out_dim, aggr='SumAggregation'))
+        self.input_dim = input_dim
+        self.embed_dim = hidden_dim
+        self.out_dim = out_dim
+        self.num_layers = num_layers
+        self.num_heads = num_heads
+        self.residual = residual
+        self.l_norm = l_norm
+        self.dropout = dropout
         
-    self.activation = nn.ReLU()
-    self.layer_norm = nn.LayerNorm(hidden_dim if num_heads is None else num_heads*hidden_dim) if l_norm else None
-    self.residual = residual
-    self.dropout = nn.Dropout(dropout)
+
+        gnn_model = getattr(torch_geometric.nn, model_name)
+        self.conv_layers = nn.ModuleList()
+        if model_name == 'GINConv':
+            input_layer = gnn_model(nn.Sequential(nn.Linear(input_dim, hidden_dim), nn.ReLU()), train_eps=True)
+        elif num_heads is None:
+            input_layer = gnn_model(input_dim, hidden_dim, aggr='SumAggregation')
+        else:
+            input_layer = gnn_model(input_dim, hidden_dim, heads=num_heads, aggr='SumAggregation')
+        self.conv_layers.append(input_layer)
+
+        for _ in range(num_layers - 2):
+            if model_name == 'GINConv':
+                self.conv_layers.append(gnn_model(nn.Sequential(nn.Linear(hidden_dim, hidden_dim), nn.ReLU()), train_eps=True))
+            elif num_heads is None:
+                self.conv_layers.append(gnn_model(hidden_dim, hidden_dim, aggr='SumAggregation'))
+            else:
+                self.conv_layers.append(gnn_model(num_heads*hidden_dim, hidden_dim, heads=num_heads, aggr='SumAggregation'))
+
+        if model_name == 'GINConv':
+            self.conv_layers.append(gnn_model(nn.Sequential(nn.Linear(hidden_dim, out_dim), nn.ReLU()), train_eps=True))
+        else:
+            self.conv_layers.append(gnn_model(hidden_dim if num_heads is None else num_heads*hidden_dim, out_dim, aggr='SumAggregation'))
+            
+        self.activation = nn.ReLU()
+        self.layer_norm = nn.LayerNorm(hidden_dim if num_heads is None else num_heads*hidden_dim) if l_norm else None
+        self.residual = residual
+        self.dropout = nn.Dropout(dropout)
 
 
-  def forward(self, in_feat, edge_index):
-    h = in_feat
-    h = self.conv_layers[0](h, edge_index)
-    h = self.activation(h)
-    if self.layer_norm is not None:
-        h = self.layer_norm(h)
-    h = self.dropout(h)
-
-    for conv in self.conv_layers[1:-1]:
-        h = conv(h, edge_index) if not self.residual else conv(h, edge_index) + h
+    def forward(self, in_feat, edge_index):
+        h = in_feat
+        h = self.conv_layers[0](h, edge_index)
         h = self.activation(h)
         if self.layer_norm is not None:
             h = self.layer_norm(h)
         h = self.dropout(h)
+
+        for conv in self.conv_layers[1:-1]:
+            h = conv(h, edge_index) if not self.residual else conv(h, edge_index) + h
+            h = self.activation(h)
+            if self.layer_norm is not None:
+                h = self.layer_norm(h)
+            h = self.dropout(h)
+        
+        h = self.conv_layers[-1](h, edge_index)
+        return h
+  
+    def save_pretrained(self, path):
+        os.makedirs(path, exist_ok=True)
+        state_dict_path = f'{path}/gnn_state_dict.pt'
+        config_path = f'{path}/gnn_config.json'
+        with open(config_path, 'w') as f:
+            json.dump(
+                {
+                    "model_name":"SAGEConv", 
+                    "input_dim": self.input_dim,
+                    "embed_dim": self.embed_dim,
+                    "out_dim": self.out_dim,
+                    "num_layers": self.num_layers,
+                    "num_heads": self.num_heads,
+                    "residual": self.residual,
+                    "l_norm": self.l_norm,
+                    "dropout": self.dropout.p,
+                }, f)
     
-    h = self.conv_layers[-1](h, edge_index)
-    return h
+        torch.save(self.state_dict(), state_dict_path)
+        print(f'Saved GNN model at {path}')
+
+
+    @staticmethod
+    def from_pretrained(state_dict_dir):
+        state_dict = torch.load(f"{state_dict_dir}/gnn_state_dict.pt", map_location=DEVICE)
+        gnn_model_config = json.load(open(f"{state_dict_dir}/gnn_config.json", 'r'))
+        gnn_model = GNNModel(
+            model_name=gnn_model_config['model_name'],
+            input_dim=gnn_model_config['input_dim'],
+            hidden_dim=gnn_model_config['embed_dim'],
+            out_dim=gnn_model_config['out_dim'],
+            num_heads=gnn_model_config['num_heads'],
+            num_layers=gnn_model_config['num_layers'],
+            residual=gnn_model_config['residual'],
+            dropout=gnn_model_config['dropout'],
+        )
+        gnn_model.load_state_dict(state_dict)
+        return gnn_model
   
 
 class MLPPredictor(nn.Module):
@@ -400,9 +478,13 @@ class MLPPredictor(nn.Module):
     The concatenated embeddings are then passed through an MLP
     """
 
-    def __init__(self, h_feats, num_classes=1, num_layers=2):
+    def __init__(self, h_feats, num_layers=2, num_classes=1):
         super().__init__()
         self.layers = nn.ModuleList()
+        self.embed_dim = h_feats
+        self.num_layers = num_layers
+        self.num_classes = num_classes
+
         in_feats = h_feats * 2
         for _ in range(num_layers - 1):
             self.layers.append(nn.Linear(in_feats, h_feats))
@@ -419,3 +501,30 @@ class MLPPredictor(nn.Module):
         
         h = h.squeeze(1)
         return h
+
+    def save_pretrained(self, pth):
+        predictor_state_dict_path = f'{pth}/predictor_state_dict.pt'
+        torch.save(self.state_dict(), predictor_state_dict_path)
+
+        config_path = f'{pth}/predictor_config.json'
+        with open(config_path, 'w') as f:
+            json.dump(
+                {
+                    "h_feats": self.embed_dim,
+                    "num_classes": self.num_classes,
+                    "num_layers": self.num_layers,
+                }, f)
+        
+        print(f'Saved MLP predictor at {pth}')
+    
+    @staticmethod
+    def from_pretrained(state_dict_dir):
+        state_dict = torch.load(f"{state_dict_dir}/predictor_state_dict.pt", map_location=DEVICE)
+        predictor_config = json.load(open(f"{state_dict_dir}/predictor_config.json", 'r'))
+        predictor = MLPPredictor(
+            h_feats=predictor_config['h_feats'],
+            num_classes=predictor_config['num_classes'],
+            num_layers=predictor_config['num_layers'],
+        )
+        predictor.load_state_dict(state_dict)
+        return predictor

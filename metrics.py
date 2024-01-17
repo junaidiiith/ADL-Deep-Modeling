@@ -136,16 +136,12 @@ def compute_loss(pos_score, neg_score):
 
 
 
-def get_eval_stats(eval_result):
+def get_prelexity(loss):
     """
         This method computes the evaluation stats for the given eval result
     """
-    stats = {
-        'loss': eval_result['eval_loss'], 
-        'perplexity': math.exp(eval_result['eval_loss']), 
-        'accuracy': eval_result['eval_accuracy'],
-    }
-    return stats
+
+    return math.exp(loss)
 
 
 def compute_metrics(eval_preds):

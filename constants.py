@@ -71,6 +71,8 @@ EMBEDDING_MODEL = 'embedding_model'
 CLASSIFICATION_TYPE = 'class_type'
 FROM_PRETRAINED = 'from_pretrained'
 TOKENIZER_LABEL = 'tokenizer'
+BEST_MODEL_LABEL = 'best_model.pt'
+SAFE_TENSORS_LABEL = 'model.safetensors'
 
 CUSTOM_WORD_TOKENIZER = 'Custom Word Tokenizer'
 
@@ -130,3 +132,5 @@ phase_mapping = {
     TRAINING_PHASE_LABEL: TRAINING_PHASE,
     INFERENCE_PHASE_LABEL: INFERENCE_PHASE
 }
+
+TRAINING_CONFIG_JSON = 'training_config.json'

@@ -1,3 +1,5 @@
+import streamlit as st
+import pandas as pd
 from parameters import parse_args
 import os
 import pickle
@@ -13,6 +15,45 @@ import dgl
 from models import GNNModel, MLPPredictor
 from trainers.link_predictor import GNNLinkPredictionTrainer
 from constants import *
+
+
+def describe_graph_dataloader(dataloader, split_type):
+    """
+        Describe the graph dataloader
+        Prints - 
+        1. total number of nodes
+        2. average number of nodes
+        3. total number of edges
+        4. average number of edges
+        5. total and average train positive and negative edges
+        6. total and average test positive and negative edges
+        
+        'train_pos_g': train graph with positive edges 
+        'train_neg_g': train graph negative edges
+        'test_pos_g': test graph with positive edges
+        'test_neg_g': test graph with negative edges
+        
+    """
+    mean_and_median = lambda x: (sum(x), sum(x) / len(x), sorted(x)[len(x) // 2])
+    nodes = [g['train_g'].num_nodes() for g in dataloader]
+    train_pos_edges = [g['train_pos_g'].num_edges() for g in dataloader]
+    train_neg_edges = [g['train_neg_g'].num_edges() for g in dataloader]
+    test_pos_edges = [g['test_pos_g'].num_edges() for g in dataloader]
+    test_neg_edges = [g['test_neg_g'].num_edges() for g in dataloader]
+
+    d = {
+        'Nodes': mean_and_median(nodes),
+        'Train Pos Edges': mean_and_median(train_pos_edges),
+        'Train Neg Edges': mean_and_median(train_neg_edges),
+        'Test Pos Edges': mean_and_median(test_pos_edges),
+        'Test Neg Edges': mean_and_median(test_neg_edges),
+    }
+    df = pd.DataFrame.from_dict(d, orient='index', columns=['Total', 'Average', 'Median'])
+    print(df)
+    with st.expander(f"{split_type} Graphs Description"):
+        
+        st.dataframe(df)
+
 
 def collate_graphs(graphs):
     """
@@ -80,30 +121,39 @@ def train_link_prediction(graphs, args):
     
     language_model = import_model(args, tokenizer)
 
-    
     input_dim = language_model.token_embedding_table.weight.data.shape[1] if args.embedding_model == UMLGPTMODEL else language_model.config.hidden_size
-    gnn_model = GNNModel(
-        model_name='SAGEConv', 
-        input_dim=input_dim, 
-        hidden_dim=args.embed_dim,
-        out_dim=args.embed_dim,
-        num_layers=args.num_layers, 
-        residual=True,
-    )
+    
+    args.embedding_model = language_model.name_or_path
+    print("Embed model", args.embedding_model)
+    # exit(0)
 
-    predictor = MLPPredictor(
-        h_feats=args.embed_dim,
-        num_layers=2,
-    )
-    # print(language_model, tokenizer, gnn_model, predictor)
+    if args.phase == TRAINING_PHASE:
+        
+        gnn_model = GNNModel(
+            model_name='SAGEConv', 
+            input_dim=input_dim, 
+            hidden_dim=args.embed_dim,
+            out_dim=args.embed_dim,
+            num_layers=args.num_layers, 
+            residual=True,
+        )
+
+        predictor = MLPPredictor(
+            h_feats=args.embed_dim,
+            num_layers=2,
+        )
+        # print(language_model, tokenizer, gnn_model, predictor)
+    else:
+        pth = os.path.join(args.models_dir, args.embedding_model)
+        gnn_model = GNNModel.from_pretrained(pth)
+        predictor = MLPPredictor.from_pretrained(pth)
+
     lp_trainer = GNNLinkPredictionTrainer(gnn_model, predictor, args)
-
+    graphs_dataset_file = args.graphs_file.split(os.sep)[-1]
     for split_type in graphs:
         print(f"Training Link Prediction {split_type} graphs")
-        # with st.empty():
-        #     st.write(f"Training Link Prediction on {split_type} graphs")
-
-        dataset_prefix = f"{split_type}_ip={input_dim}_tok={os.path.basename(tokenizer.name_or_path)}"
+        
+        dataset_prefix = f"{graphs_dataset_file}/{split_type}_ip={input_dim}_tok={os.path.basename(tokenizer.name_or_path)}"
         dataset = LinkPredictionDataset(
             graphs=graphs[split_type], 
             tokenizer=tokenizer, 
@@ -111,14 +161,33 @@ def train_link_prediction(graphs, args):
             test_size=args.test_size, 
             prefix=dataset_prefix
         )
+        print("Dataset of size: ", len(dataset))
         dataloader = GraphDataLoader(
             dataset, 
             batch_size=args.batch_size, 
             shuffle=True, 
             collate_fn=collate_graphs
         )
-        lp_trainer.run_epochs(dataloader, args.num_epochs)
+        
+        describe_graph_dataloader(dataloader, split_type)
+        
+        if args.phase == TRAINING_PHASE:
+            print("Training link prediction")
+            print("Dataset Description")
 
+            results = lp_trainer.run_epochs(dataloader, args.num_epochs)
+            print(results)
+            lp_trainer.save_model()
+        else:
+            loss, accuracy = lp_trainer.test(dataloader)
+
+            with lp_trainer.st_results.container():
+                st.markdown(f"## Results for {split_type} graphs")
+                st.markdown(f"### Loss: {loss:.3f}")
+                st.markdown(f"### Accuracy: {accuracy:.3f}")
+
+        print(f"Results for {split_type} graphs")
+        
 
 def main(args):
     """
@@ -138,6 +207,6 @@ def main(args):
         ### Comment the break statement to train on all the folds
         break
 
-# if __name__ == '__main__':
-#     args = parse_args()
-#     main(args)
+if __name__ == '__main__':
+    args = parse_args()
+    main(args)

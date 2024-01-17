@@ -3,6 +3,7 @@ from collections import defaultdict
 import fnmatch
 import os
 from zipfile import ZipFile
+from numpy import tri
 from sklearn.model_selection import StratifiedKFold
 import torch
 from tqdm.auto import tqdm
@@ -12,6 +13,7 @@ from tqdm.auto import tqdm
 from collections import deque
 import re
 import itertools
+from constants import TRAINING_PHASE, UPLOADED_DATA_DIR
 from uml_datasets import EncodingsDataset
 from uml_data_generation import get_encoding_size
 
@@ -185,7 +187,7 @@ def get_ontouml_to_nx(data_dir, min_stereotypes=10):
             stereotype_nodes = [node for node, stereotype in g.nodes(data=ONTOUML_STEREOTYPE) if stereotype is not None]
             if len(stereotype_nodes) >= min_stereotypes:
                 ontouml_graphs.append((g, mfp))
-    
+    print("No of graph: ", len(ontouml_graphs))
     return ontouml_graphs
 
 
@@ -254,22 +256,42 @@ def has_neighbours_incl_incoming(graph, node):
 
 
 def get_graphs_data_kfold(args):
+    print("Graphs file", args.graphs_file)
     ontology_graphs = get_ontouml_to_nx(args.graphs_file)
-    label_encoder = get_label_encoder(ontology_graphs, args.exclude_limit)
+    
+    print("Total graphs:", len(ontology_graphs))
+    
+
+    if args.phase == TRAINING_PHASE:
+        label_encoder = get_label_encoder(ontology_graphs, args.exclude_limit)
+    else:
+        le_path = os.path.join(UPLOADED_DATA_DIR, f'label_encoder_{args.exclude_limit}.json')
+        label_encoder = json.load(open(le_path, 'r'))
+        
     stereotypes_classes = list(label_encoder.keys())
     X = [1]*len(ontology_graphs)
     # k_folds = int(1/args.test_size)
     k_folds = 5
     skf = StratifiedKFold(n_splits=k_folds, shuffle=True, random_state=args.seed)
     for train_idx, val_idx in skf.split(X, X):
-        seen_graphs = [ontology_graphs[i] for i in train_idx]
-        unseen_graphs = [ontology_graphs[i] for i in val_idx]
+        print(train_idx, val_idx)
+        if args.phase == TRAINING_PHASE:
+            seen_graphs = [ontology_graphs[i] for i in train_idx]
+            unseen_graphs = [ontology_graphs[i] for i in val_idx]
 
-        mask_graphs(seen_graphs, stereotypes_classes,\
-                    mask_prob=args.ontouml_mask_prob)
-        mask_graphs(unseen_graphs, stereotypes_classes,\
-                    mask_prob=args.ontouml_mask_prob)
-        yield seen_graphs, unseen_graphs, label_encoder
+            mask_graphs(seen_graphs, stereotypes_classes,\
+                        mask_prob=args.ontouml_mask_prob)
+            mask_graphs(unseen_graphs, stereotypes_classes,\
+                        mask_prob=args.ontouml_mask_prob)
+            yield seen_graphs, unseen_graphs, label_encoder
+
+        else:
+            seen_graphs = [ontology_graphs[i] for i in train_idx] + \
+                [ontology_graphs[i] for i in val_idx] 
+            mask_graphs(seen_graphs, stereotypes_classes,\
+                        mask_prob=args.ontouml_mask_prob)
+            print(len(seen_graphs))
+            yield seen_graphs, list(), label_encoder
 
 
 def check_stereotype_relevance(g, n):

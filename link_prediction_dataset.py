@@ -7,7 +7,7 @@ import numpy as np
 from embeddings import get_embedding
 from tokenization import get_tokenization
 from uml_data_generation import promptize_node
-
+from tqdm.auto import tqdm
 
 from constants import DEVICE
 
@@ -50,7 +50,9 @@ class LinkPredictionDataset(DGLDataset):
 
     def _prepare(self):
         print("Cache does not exist. Preparing graphs...")
-        prepared_graphs = [self._prepare_graph(g) for g in stqdm(self.raw_graphs, desc='Preparing graphs')]
+        # prepared_graphs = [self._prepare_graph(g) for g in stqdm(self.raw_graphs, desc='Preparing graphs')]
+        prepared_graphs = [self._prepare_graph(g) for g in tqdm(self.raw_graphs, desc='Preparing graphs')]
+        prepared_graphs = [g for g in prepared_graphs if g is not None]
         return prepared_graphs
     
     def _prepare_graph(self, g):
@@ -71,8 +73,12 @@ class LinkPredictionDataset(DGLDataset):
         """
         node_strs = [promptize_node(g, n) for n in g.nodes()]
         node_encodings = get_tokenization(self.tokenizer, node_strs)
+
         node_embeddings = get_embedding(self.model, node_encodings)
-        pos_neg_graphs = get_pos_neg_graphs(g, self.test_size)        
+        try:
+            pos_neg_graphs = get_pos_neg_graphs(g, self.test_size)
+        except Exception:
+            return None
         
         dgl_graph = pos_neg_graphs['train_g']
         dgl_graph.ndata['h'] = node_embeddings
@@ -145,7 +151,15 @@ def get_pos_neg_graphs(nxg, tr=0.2):
     adj_neg = 1 - adj.to_dense() - np.eye(g.number_of_nodes())
     neg_u, neg_v = np.where(adj_neg != 0)
 
-    neg_eids = np.random.choice(len(neg_u), g.number_of_edges())
+    try:
+        neg_eids = np.random.choice(len(neg_u), g.number_of_edges())
+    except ValueError:
+        neg_eids = np.random.choice(len(neg_u), g.number_of_edges(), replace=True)
+        print(sum(adj.to_dense().flatten()))
+        print(sum(adj_neg.flatten()))
+        print(g.number_of_edges())
+        print(g.number_of_nodes())
+
     test_neg_u, test_neg_v = neg_u[neg_eids[:test_size]], neg_v[neg_eids[:test_size]]
     train_neg_u, train_neg_v = neg_u[neg_eids[test_size:]], neg_v[neg_eids[test_size:]]
 
@@ -153,6 +167,8 @@ def get_pos_neg_graphs(nxg, tr=0.2):
 
     train_pos_g = dgl.graph((train_pos_u, train_pos_v), num_nodes=g.number_of_nodes())
     train_neg_g = dgl.graph((train_neg_u, train_neg_v), num_nodes=g.number_of_nodes())
+
+
 
     test_pos_g = dgl.graph((test_pos_u, test_pos_v), num_nodes=g.number_of_nodes())
     test_neg_g = dgl.graph((test_neg_u, test_neg_v), num_nodes=g.number_of_nodes())

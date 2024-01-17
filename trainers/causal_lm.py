@@ -1,8 +1,10 @@
+import pandas as pd
 from constants import *
 import streamlit as st
 from tqdm.auto import tqdm
 import os
 
+from stqdm import stqdm
 
 class CausalLMTrainer:
     def __init__(self, model, tokenizer, dataset, args):
@@ -15,7 +17,7 @@ class CausalLMTrainer:
                 shuffle=args.phase == TRAINING_PHASE,
             ) for split_type in dataset
         }
-        self.optimizer = torch.optim.AdamW(self.model.parameters(), lr=2e-5)
+        self.optimizer = torch.optim.AdamW(self.model.parameters(), lr=args.lr)
         self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(self.optimizer, T_max=args.num_epochs)
         self.models_dir = args.models_dir
         self.results_dir = args.log_dir
@@ -39,7 +41,7 @@ class CausalLMTrainer:
     def train_epoch(self, epoch):
         self.model.train()
         epoch_loss = 0
-        for i, batch in tqdm(enumerate(self.dataloaders[TRAIN_LABEL]), desc=f'Epoch {epoch + 1}', total=len(self.dataloaders[TRAIN_LABEL])):
+        for i, batch in stqdm(enumerate(self.dataloaders[TRAIN_LABEL]), desc=f'Epoch {epoch + 1}', total=len(self.dataloaders[TRAIN_LABEL])):
             self.optimizer.zero_grad()
             loss = self.step(batch)
             loss.backward()
@@ -78,8 +80,8 @@ class CausalLMTrainer:
     def train(self, num_epochs):
         results = list()
         best_loss = float('inf')
-        # for epoch in stqdm(range(num_epochs)):
-        for epoch in tqdm(range(num_epochs)):
+        for epoch in stqdm(range(num_epochs)):
+        # for epoch in tqdm(range(num_epochs)):
             train_loss = self.train_epoch(epoch)
             test_loss = self.evaluate(TEST_LABEL)
             unseen_loss = self.evaluate(UNSEEN_LABEL)
@@ -96,7 +98,7 @@ class CausalLMTrainer:
                     EPOCH: epoch,
                     "train_loss": train_loss,
                     "test_loss": test_loss,
-                    "UNSEEN_LOSS": unseen_loss
+                    "unseen_loss": unseen_loss,
                 }
             )
             # break
@@ -113,3 +115,10 @@ class CausalLMTrainer:
         print(f'Saved model at {self.models_dir}')
     
 
+    def save_results(self):
+        if not os.path.exists(self.logs_dir):
+            os.makedirs(self.logs_dir)
+
+        df = pd.DataFrame(self.results)
+        df.to_csv(os.path.join(self.logs_dir, 'results.csv'), index=False)
+        print(f'Saved results at {self.logs_dir}')

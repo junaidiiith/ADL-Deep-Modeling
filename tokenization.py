@@ -54,8 +54,12 @@ def get_tokenization(tokenizer, data):
         tokenized_data = tokenizer.batch_encode(
             data, return_tensors='pt', max_length='percentile')
     else:
+        tokens = tokenizer(data)
+        lengths = [len(i) for i in tokens['input_ids']]
+        size = int(np.percentile(lengths, 99.5))
+
         tokenized_data = tokenizer(
-            data, return_tensors='pt', padding=True)
+            data, return_tensors='pt', padding=True, truncation=True, max_length=size)
     return tokenized_data
 
 

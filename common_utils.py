@@ -45,36 +45,49 @@ def create_run_config(args):
     config[RUN_COMMAND] = create_run_command_line(args)
 
     print(config[RUN_COMMAND])
-    
-    file_name = f"{args.stage}_"
+
+    file_name = ""
+
     if args.stage == PRETRAINING:
+        ## If stage is pretraining then there has to be a pretraining gpt model
         if config[GPT_MODEL] in [UMLGPTMODEL]:
             file_name += f"{config[GPT_MODEL]}_tok={config['tokenizer']}"
         else:
             file_name += f"{config[GPT_MODEL]}"
 
-    elif args.stage == UML_CLASSIFICATION:
-        if args.classification_model not in [UMLGPTMODEL]:
-            file_name += f"fp_{config[FROM_PRETRAINED].split(os.sep)[-2] if os.sep in config[FROM_PRETRAINED] else config[FROM_PRETRAINED]}"
-        else:
-            if config[FROM_PRETRAINED] is not None:
-                file_name += f"fp_{config[FROM_PRETRAINED].split(os.sep)[-2] if os.sep in config[FROM_PRETRAINED] else config[FROM_PRETRAINED]}"
-            else:
-                file_name += f"{config[CLASSIFICATION_MODEL]}"
 
-            file_name += f"_tok={config['tokenizer']}"
+    elif args.stage == UML_CLASSIFICATION:
+
+        if args.classification_model in [UMLGPTMODEL]:
+
+            if config[FROM_PRETRAINED] is not None and UML_CLASSIFICATION not in config[FROM_PRETRAINED]:
+                file_name += f"fp_{config[FROM_PRETRAINED].replace(os.sep, '_').replace(BEST_MODEL_LABEL, '')}"
+            else:
+                file_name += f"{config[CLASSIFICATION_MODEL]}" + f"_tok={config['tokenizer']}"
+        else:
+            model_name = os.path.basename(config[FROM_PRETRAINED])
+            file_name += f"fp_{model_name}" if UML_CLASSIFICATION not in model_name else "_inf_"
         
         file_name += f"_{config[CLASSIFICATION_TYPE]}"
-        
 
+        
     elif args.stage == LINK_PREDICTION:
-        file_name += f"{config[EMBEDDING_MODEL].split(os.sep)[-2]}_tok={config['tokenizer']}"
+        file_name += f"{config[EMBEDDING_MODEL]}"
+        
     
     elif args.stage == ONTOML_CLS:
-        if config[FROM_PRETRAINED] is not None and args.phase == INFERENCE_PHASE:
-            file_name += f"fp_{config[FROM_PRETRAINED].split(os.sep)[-2] if os.sep in config[FROM_PRETRAINED] else config[FROM_PRETRAINED]}"
-        file_name += f"_distance={args.distance}"
-        file_name += f"_el={args.exclude_limit}"
+        if args.phase == TRAINING_PHASE:
+            if UML_CLASSIFICATION not in config[FROM_PRETRAINED]:
+                file_name += f"fp_{config[FROM_PRETRAINED]}"
+            else:
+                file_name += f"fp_{config[FROM_PRETRAINED].split(os.sep)[-1]}"
+            
+            file_name += f"_distance_{args.distance}"
+            file_name += f"_el_{args.exclude_limit}"
+        else:
+            file_name += f"{config[FROM_PRETRAINED].split(os.sep)[-1]}"
+        
+            
 
     
     os.makedirs(os.path.join(args.log_dir, file_name), exist_ok=True)
@@ -88,6 +101,6 @@ def create_run_config(args):
     # print(config)
     # print(args.models_dir)
 
-    json.dump(config, open(os.path.join(args.models_dir, f'config.json'), 'w'), indent=4)
+    json.dump(config, open(os.path.join(args.models_dir, f'{TRAINING_CONFIG_JSON}'), 'w'), indent=4)
 
     return config

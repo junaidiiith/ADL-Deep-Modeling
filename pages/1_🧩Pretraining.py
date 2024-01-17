@@ -20,28 +20,31 @@ def validate():
 
 
 def process_uml_gpt_dir(uml_plm_dir):
-    all_files = [f for f in os.listdir(os.path.join(args.models_dir, uml_plm_dir)) if not f.startswith('.')]
+    all_files = [f for f in os.listdir(uml_plm_dir) if not f.startswith('.')]
     config_file = [f for f in all_files if f.endswith('config.json')][0]
-    conf_file_path = os.path.join(args.models_dir, uml_plm_dir, config_file)
+    conf_file_path = os.path.join(uml_plm_dir, config_file)
     config = json.load(open(conf_file_path, 'r'))
 
     model_pretrained_file = [os.path.join(uml_plm_dir, f) for f in all_files if f.endswith('best_model.pth') or f.endswith('best_model.pt')][0]
     tokenizer = [os.path.join(uml_plm_dir, f) for f in all_files if f.endswith('.pkl') or f.endswith('.pickle')]
     if len(tokenizer) and tokenizer[0].endswith('.pkl'):
         tokenizer = tokenizer[0]
-        args.tokenizer_file = os.path.join(args.models_dir, tokenizer)
+        args.tokenizer_file = tokenizer
     else:
         tokenizer = config['tokenizer']
 
-    args.from_pretrained = os.path.join(args.models_dir, model_pretrained_file)
+    args.from_pretrained = model_pretrained_file
     args.tokenizer = WORD_TOKENIZER if tokenizer.endswith('.pkl') else tokenizer
     
-
 
 args = parse_args()
 st.set_page_config(page_title="Pretraining GPT", page_icon="🧩")
 
 st.markdown("## Train Generative Models for UML models")
+args.models_dir = os.path.join(args.models_dir, PRETRAINING)
+args.log_dir = os.path.join(args.log_dir, PRETRAINING)
+args.inference_models_dir = os.path.join(args.inference_models_dir, PRETRAINING)
+
 
 args.phase = phase_mapping[st.radio('Execution Phase', options=list(phase_mapping.keys()))]
  
@@ -91,16 +94,16 @@ if args.gpt_model == UMLGPTMODEL:
         tokenizer = tokenizer_names[st.selectbox('Tokenizer', list(tokenizer_names.keys()))]
         args.tokenizer = tokenizer
     else:
-        plms = get_plms(args.models_dir, PRETRAINING, args.gpt_model)
-        plm_dir = st.selectbox('Pretrained Model', plms)
+        plms = get_plms(args.inference_models_dir, PRETRAINING, args.gpt_model)
+        plm_dir = os.path.join(args.inference_models_dir, st.selectbox('Pretrained Model', plms))
         process_uml_gpt_dir(plm_dir)
 
 else:
     if args.phase == TRAINING_PHASE:
         args.tokenizer = args.gpt_model
     else:
-        plms = get_plms(args.models_dir, PRETRAINING, args.gpt_model)
-        plm_dir = os.path.join(args.models_dir, st.selectbox('Pretrained HF Model', plms))
+        plms = get_plms(args.inference_models_dir, PRETRAINING, args.gpt_model)
+        plm_dir = os.path.join(args.inference_models_dir, st.selectbox('Pretrained HF Model', plms))
         args.from_pretrained = plm_dir
 
 

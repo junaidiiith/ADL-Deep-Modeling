@@ -14,10 +14,9 @@ The pretraining is done on the graph data.
 def main(args):
 
     create_run_config(args)
-    # exit(0)
-    # print(config)
-    # print("Loading graph data from:", args.graphs_file)
+    print(args)
 
+    # exit(0)
     graph_data = get_graph_data(args.graphs_file)
     for _, data in enumerate(get_kfold_lm_data(graph_data, seed=args.seed, phase=args.phase)):
         print("Running fold:", _)

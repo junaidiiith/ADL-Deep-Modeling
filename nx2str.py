@@ -1,3 +1,5 @@
+import dgl
+import torch
 from collections import Counter
 import os
 import pickle
@@ -25,6 +27,8 @@ def masked_graph(graph, mask_perc=0.2):
     for edge in edges_to_mask:
         graph.edges[edge]['masked'] = True
     
+    assert all(['type' in graph.edges[edge] for edge in graph.edges()])
+    
 
 def add_node_connections_str(g):
 
@@ -33,9 +37,11 @@ def add_node_connections_str(g):
     This information is later used to generate the node triples
     For e.g., if a triple would be (node, reference, super_type)
     """
-
+    assert all(['type' in g.edges[edge] for edge in g.edges()])
     edges_to_remove = [edge for edge in g.edges() if g.edges[edge]['masked']]
+    edge_dicts = {edge: g.edges[edge] for edge in edges_to_remove}
     g.remove_edges_from(edges_to_remove)
+    
 
     for n in g.nodes():
         super_type_nodes = [edge[1] for edge in g.edges(n) if g.edges[edge]['type'] == 'generalization' and len(edge[1].strip())]
@@ -57,14 +63,19 @@ def add_node_connections_str(g):
     g.add_edges_from(edges_to_remove)
     for edge in edges_to_remove:
         g.edges[edge]['masked'] = True
-
+        for k, v in edge_dicts[edge].items():
+            g.edges[edge][k] = v
+        
 
 def mask_graphs(graphs):
     """
         Mask a list of graphs
     """
-    for g in tqdm(graphs, desc='Masking graphs'):
-        masked_graph(g)
+    for graph in graphs:
+        assert all(['type' in graph.edges[edge] for edge in graph.edges()])
+
+    for graph in tqdm(graphs, desc='Masking graphs'):
+        masked_graph(graph)
     
 
 def add_node_connections_str_to_graphs(graphs):
@@ -72,6 +83,10 @@ def add_node_connections_str_to_graphs(graphs):
         Mask a list of graphs
         Add node connections to a list of graphs
     """
+    for graph in graphs:
+        assert all(['type' in graph.edges[edge] for edge in graph.edges()])
+        
+
     mask_graphs(graphs)
     for g in tqdm(graphs, desc='Adding node strings to graphs'):
         add_node_connections_str(g)
@@ -92,6 +107,17 @@ def get_node_triples_from_graph(g):
         triples.append((n, references, super_types))
 
     return triples
+
+def filter_graphs(graphs):
+    filtered_graphs = list()
+    for g in graphs:
+        if any(['masked' in g.edges[edge] for edge in g.edges()]):
+            filtered_graphs.append(g)
+            continue
+    
+    graphs.clear()
+    graphs.extend(filtered_graphs)
+    return graphs
 
 
 def get_node_triples_from_graphs(graphs):
@@ -120,7 +146,7 @@ def get_graphs_from_dir(graphs_file):
 
 def get_graph_data(graphs_file, seed=42):
     """
-        Takes a list of graphs
+        Takes a graphs dir path containing a list of graphs
         Split the graphs into train and test
         Adds node connections to the graphs i.e., references and super types
         Get node triples from the graphs i.e., (node, references, super types)
@@ -143,6 +169,12 @@ def get_graph_data(graphs_file, seed=42):
 
     """
     graphs = get_graphs_from_directory(graphs_file)
+    if isinstance(graphs[0], tuple):
+        graphs = [g for _, g in graphs]
+
+    for graph in graphs:
+        assert all(['type' in graph.edges[edge] for edge in graph.edges()])
+
     dir_name = os.path.dirname(graphs_file)
     node_triples_file = os.path.join(dir_name, os.path.basename(graphs_file) + '_node_triples.pkl')
 
@@ -150,10 +182,27 @@ def get_graph_data(graphs_file, seed=42):
         data = pickle.load(open(node_triples_file, 'rb'))
         return data
 
-    train_graphs, test_graphs = train_test_split(graphs, test_size=0.05, random_state=seed)
+    if len(graphs) > 1:    
+        train_graphs, test_graphs = train_test_split(graphs, test_size=0.05, random_state=seed)
+    else:
+        train_graphs, test_graphs = [graph.copy()], [graph.copy()]
 
+
+    for graph in train_graphs:
+        assert all(['type' in graph.edges[edge] for edge in graph.edges()])
+
+    for graph in test_graphs:
+        assert all(['type' in graph.edges[edge] for edge in graph.edges()])
+        
+    
     add_node_connections_str_to_graphs(train_graphs)
     add_node_connections_str_to_graphs(test_graphs)
+
+    train_graphs = filter_graphs(train_graphs)
+    test_graphs = filter_graphs(test_graphs)
+
+    print("Total train graphs:", len(train_graphs))
+    print("Total test graphs:", len(test_graphs))
 
     train_triples = get_node_triples_from_graphs(train_graphs)
     test_triples = get_node_triples_from_graphs(test_graphs)
@@ -169,7 +218,7 @@ def get_graph_data(graphs_file, seed=42):
 
     all_selected_super_types = [
         max(super_types, key=lambda x: all_super_types_count[x])\
-              if len(super_types) else ''  for super_types in all_super_types]
+            if len(super_types) else ''  for super_types in all_super_types]
     
     selected_super_types_count = Counter(all_selected_super_types)
     selected_super_types_count.pop('', None)
@@ -200,6 +249,8 @@ def get_graph_data(graphs_file, seed=42):
     }
 
     pickle.dump(data, open(node_triples_file, 'wb'))
+    
+    
     return data
 
 # if __name__ == "__main__":
