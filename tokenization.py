@@ -26,7 +26,7 @@ def get_pretrained_lm_tokenizer(model_name, special_tokens=SPECIAL_TOKENS):
     """
         ``get_pretrained_lm_tokenizer`` function returns the tokenizer for the given hugging face language model
     """
-
+    
     tokenizer = AutoTokenizer.from_pretrained(model_name)
     tokenizer.add_special_tokens({'additional_special_tokens': special_tokens})
     if tokenizer.pad_token is None:

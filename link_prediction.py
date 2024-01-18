@@ -144,12 +144,14 @@ def train_link_prediction(graphs, args):
         )
         # print(language_model, tokenizer, gnn_model, predictor)
     else:
-        pth = os.path.join(args.models_dir, args.embedding_model)
-        gnn_model = GNNModel.from_pretrained(pth)
-        predictor = MLPPredictor.from_pretrained(pth)
+        with st.spinner("Loading trained GNN Model"):
+            pth = args.gnn_location
+            gnn_model = GNNModel.from_pretrained(pth)
+            predictor = MLPPredictor.from_pretrained(pth)
 
     lp_trainer = GNNLinkPredictionTrainer(gnn_model, predictor, args)
     graphs_dataset_file = args.graphs_file.split(os.sep)[-1]
+    print("GDF", graphs_dataset_file)
     for split_type in graphs:
         print(f"Training Link Prediction {split_type} graphs")
         
@@ -178,6 +180,7 @@ def train_link_prediction(graphs, args):
             results = lp_trainer.run_epochs(dataloader, args.num_epochs)
             print(results)
             lp_trainer.save_model()
+            
         else:
             loss, accuracy = lp_trainer.test(dataloader)
 

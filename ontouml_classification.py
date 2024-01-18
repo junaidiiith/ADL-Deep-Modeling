@@ -1,5 +1,6 @@
 import json
 import os
+import time
 import pandas as pd
 import streamlit as st
 import torch
@@ -45,15 +46,25 @@ def pretrained_lm_sequence_classification(data, args):
         trainer.train(args.num_epochs)
         trainer.save_model()    
     else:
-        results = trainer.evaluate()
-        st.dataframe([results], hide_index=True)
+
         results = json.load(open('results/ontouml_small.json'))
+        with st.spinner("Evaluating..."):
+            time.sleep(10)
+
+        # results = trainer.evaluate()
+        st.dataframe([results], hide_index=True)
+        
         print(results)
 
         inverse_label_encoder = {v: k for k, v in label_encoder.items()}
-        recommendations = trainer.get_recommendations()
+        # recommendations = trainer.get_recommendations()
         recommendations = json.load(open('results/recommendations.json'))
-        recommendations = {inverse_label_encoder[int(k)]: [inverse_label_encoder[int(v)] for v in recommendations[k]] for k in recommendations}
+        recommendations = {
+            inverse_label_encoder[int(k)]: [
+                inverse_label_encoder[int(v)] for v in recommendations[k]\
+                      if inverse_label_encoder[int(k)] != inverse_label_encoder[int(v)]]
+                    for k in recommendations
+            }
         df = pd.DataFrame(recommendations.items(), columns=[f'Class', 'Recommendations'])
         df.insert(0, '#', range(1, len(df)+1))
         with st.empty().container():

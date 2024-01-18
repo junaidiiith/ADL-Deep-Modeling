@@ -50,6 +50,8 @@ def parse_args():
     parser.add_argument("--data_dir", type=str, default="uploaded_data")
     parser.add_argument("--log_dir", type=str, default="logs")
     parser.add_argument("--inference_models_dir", type=str, default="trained_models")
+    parser.add_argument("--gnn_location", type=str)
+    
     
     parser.add_argument("--graphs_file", type=str)
     parser.add_argument("--classification_model", type=str)

@@ -1,6 +1,5 @@
 #! Description: This file contains the code for training the UML-GPT model for classification task.
 
-import json
 import pandas as pd
 import streamlit as st
 import pickle
@@ -65,6 +64,7 @@ def get_uml_gpt_classifier(vocab_size, init_classifier, num_classes, args):
                 n_layer=args.num_layers, 
                 n_head=args.num_heads
             )
+            print("Created UMLGPT model")
             classifier = UMLGPTClassifier(uml_gpt, num_classes=num_classes)
             print("Created UMLGPTClassifier model")
         else:
@@ -140,10 +140,21 @@ def train_uml_gpt_classification(data, label_encoder, compute_metrics_fn, args):
     if args.phase == TRAINING_PHASE:
         uml_gpt_trainer.train(args.num_epochs)
     else:
-        results = uml_gpt_trainer.evaluate()
+        with st.spinner("Evaluating..."):
+            results = uml_gpt_trainer.evaluate()
+
+        # if args.tokenizer == WORD_TOKENIZER:
+        #     results = pd.read_csv('results/super_type_cls_umlgpt_word.csv')
+            
+        # else:
+        #     results = pd.read_csv('results/super_type_cls_umlgpt_bert.csv')
+        
+        # results = dict(results.iloc[-1])
+        # results = {k: v for k, v in results.items() if k.startswith('test') and not k.endswith('loss')}
+        
         print(results)
         st.dataframe([results], hide_index=True)
-        get_recommendations(uml_gpt_trainer, label_encoder)
+        # get_recommendations(uml_gpt_trainer, label_encoder)
 
 
 def pretrained_lm_sequence_classification(data, label_encoder, args):
@@ -181,12 +192,13 @@ def pretrained_lm_sequence_classification(data, label_encoder, args):
     else:
         print("Inference")
         results = hf_trainer.evaluate()
+        
         print(results)
         st.markdown("## Metrics")
         st.dataframe([results], hide_index=True)
 
 
-        get_recommendations(hf_trainer, label_encoder)
+        # get_recommendations(hf_trainer, label_encoder)
 
 
 def main(args):

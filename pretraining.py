@@ -4,6 +4,7 @@ from training_utils import train_umlgpt, train_hugging_face_gpt
 from uml_data_generation import get_kfold_lm_data, get_promptized_data_for_generation
 from common_utils import create_run_config
 from constants import UMLGPTMODEL
+import streamlit as st
 
 
 """
@@ -21,8 +22,10 @@ def main(args):
     for _, data in enumerate(get_kfold_lm_data(graph_data, seed=args.seed, phase=args.phase)):
         print("Running fold:", _)
 
-        print("Creating dataset...")
-        dataset = get_promptized_data_for_generation(data)
+        
+        with st.spinner("Creating dataset..."):
+            dataset = get_promptized_data_for_generation(data)
+
 
         print("Initializing...", dataset.keys())
         # print(dataset['test'][0])

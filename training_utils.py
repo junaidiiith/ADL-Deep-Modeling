@@ -80,7 +80,9 @@ def train_umlgpt(dataset, args):
 
 
     print("Tokenize dataset...")
-    tokenized_dataset = get_generative_uml_dataset(dataset, tokenizer)
+    with st.spinner("Tokenizing dataset..."):
+        tokenized_dataset = get_generative_uml_dataset(dataset, tokenizer)
+    
     print("Done!")
 
     if args.from_pretrained is not None:
