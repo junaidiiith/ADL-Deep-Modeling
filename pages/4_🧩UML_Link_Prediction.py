@@ -52,6 +52,8 @@ st.markdown(PAGE_TITLE)
 args.phase = phase_mapping[st.radio('Execution Phase', options=list(phase_mapping.keys()))]
 args.embedding_model = all_plms[st.selectbox('Node Embedding Model', list(all_plms.keys()))]
 
+gnns_location = os.path.join(parent_dir, LINK_PREDICTION, args.embedding_model)
+
 if args.embedding_model.strip() == UMLGPTMODEL:
     plms = [os.path.join(plms_repo, i) for i in get_plms(plms_repo, PRETRAINING, args.embedding_model)]
     plm_dir = st.selectbox('Pretrained Model', plms)
@@ -60,7 +62,7 @@ else:
     finetuned = st.toggle('Use Finetuned Model?', value=False)
     if finetuned:
         print(args.inference_models_dir, args.embedding_model)
-        plms = get_plms(plms_repo, PRETRAINING, args.embedding_model)
+        plms = [os.path.join(plms_repo, plm) for plm in get_plms(plms_repo, PRETRAINING, args.embedding_model)]
         
         if len(plms) == 0:
             st.error(f'No finetuned models found for {args.embedding_model}!\nSelect a different PLM or train a new {args.embedding_model} model')
@@ -74,7 +76,6 @@ else:
         args.tokenizer = args.embedding_model
 
 if args.phase == TRAINING_PHASE:
-
     st.markdown("Model Parameters")
     c1, c2, c3 = st.columns(3)
     with c1:
@@ -98,6 +99,12 @@ if args.phase == TRAINING_PHASE:
 
     with c3:
         args.warmup_steps = int(st.text_input('Warmup Steps', value='100'))
+
+else:
+    trained_gnns = [
+        os.path.join(gnns_location, i) for i in os.listdir(f"{gnns_location}") if os.path.isdir(os.path.join(gnns_location, i))]
+    pretrained_gnn = st.selectbox('Pretrained GNN', trained_gnns)
+    args.gnn_location = pretrained_gnn
 
 
 st.markdown("Training Parameters")

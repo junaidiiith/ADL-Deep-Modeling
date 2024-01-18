@@ -115,6 +115,7 @@ if classification_model == UMLGPTMODEL:
     else:
         plm_path = get_model_plm()
         get_uml_gpt_tokenizer(plm_path)
+        args.from_pretrained = os.path.join(plm_path, BEST_MODEL_LABEL)
 
 else:
     if args.phase == TRAINING_PHASE:

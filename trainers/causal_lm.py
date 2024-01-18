@@ -55,6 +55,8 @@ class CausalLMTrainer:
                 unseen_loss = self.evaluate(UNSEEN_LABEL)
                 print(f'Epoch {epoch} Test Loss: {test_loss} and Unseen Loss: {unseen_loss}')
             
+            break
+
         return epoch_loss / len(self.dataloaders[TRAIN_LABEL])
     
     
@@ -101,7 +103,7 @@ class CausalLMTrainer:
                     "unseen_loss": unseen_loss,
                 }
             )
-            # break
+            break
         
         return results
 

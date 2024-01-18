@@ -31,7 +31,7 @@ class ClassificationTrainer:
     def train_epoch(self, epoch):
         self.model.train()
         epoch_metrics = {f'{TRAIN_LABEL}_{LOSS}': 0}
-        for i, batch in tqdm(enumerate(self.dataloaders[TRAIN_LABEL]), desc=f'Batch', total=len(self.dataloaders[TRAIN_LABEL])):
+        for i, batch in stqdm(enumerate(self.dataloaders[TRAIN_LABEL]), desc=f'Batch', total=len(self.dataloaders[TRAIN_LABEL])):
             loss, logits, labels = self.step(batch)
             epoch_metrics[f'{TRAIN_LABEL}_{LOSS}'] += loss.item()
             
@@ -45,6 +45,8 @@ class ClassificationTrainer:
 
             ### Gradient Clipping to prevent exploding gradients
             # torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
+            
+            break
             loss.backward()
             self.optimizer.step()
             self.scheduler.step()
@@ -63,7 +65,7 @@ class ClassificationTrainer:
                     print(f'{metric}: {unseen_metrics[metric]:.3f}', end=' ')
                 print()
 
-            # break
+            
 
         for metric in epoch_metrics:
             epoch_metrics[metric] /= len(self.dataloaders[TRAIN_LABEL])
@@ -94,7 +96,7 @@ class ClassificationTrainer:
                         eval_metrics[metric_label] = 0
                     eval_metrics[metric_label] += metrics[metric]
             
-            # break
+            break
    
         for metric in eval_metrics:
             eval_metrics[metric] /= len(self.dataloaders[split_type])
@@ -105,7 +107,7 @@ class ClassificationTrainer:
 
     def train(self, num_epochs):
         best_loss = float('inf')
-        for epoch in tqdm(range(num_epochs), desc='Training Classifer'):
+        for epoch in stqdm(range(num_epochs), desc='Training Classifer'):
         # for epoch in stqdm(range(num_epochs), desc='Training Classifer'):
             train_metrics = self.train_epoch(epoch)
             self.write_metrics(train_metrics, epoch, TRAIN_LABEL)
@@ -142,7 +144,7 @@ class ClassificationTrainer:
                     st.markdown(f"#### {split_type}")
                     st.dataframe(df, hide_index=True)
             
-            # break
+            break
         
     def save_model(self):
         pass
@@ -154,7 +156,7 @@ class ClassificationTrainer:
         """
         with torch.no_grad():
             recommendations = dict()
-            for batch in tqdm(self.dataloaders[TEST_LABEL], desc='Getting Recommendations'):
+            for batch in stqdm(self.dataloaders[TEST_LABEL], desc='Getting Recommendations'):
                 _, logits, labels = self.step(batch)
                 # print("Total number of labels: ", len(labels))
                 logits, labels = logits.cpu().numpy(), labels.cpu().numpy()
